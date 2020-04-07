@@ -40,6 +40,14 @@ ELSE()
   SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}" )
 ENDIF()
 
+# Enable ICC & AVX512 build
+if (CMAKE_CXX_COMPILER MATCHES "icpc")
+  list(APPEND __opt_flags "-xHost")
+  list(APPEND __opt_flags "-qopt-zmm-usage=high")
+  list(APPEND __opt_flags "-no-inline-max-size")
+  list(APPEND __opt_flags "-no-inline-max-total-size")
+endif()
+
 # build dependencies
 INCLUDE( ExternalProject )
 
