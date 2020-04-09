@@ -8,6 +8,7 @@
 #include <bitset>
 #include <fstream>
 #include <omp.h>
+#include <x86intrin.h>
 
 using namespace std;
 

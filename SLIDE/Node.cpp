@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <sys/mman.h>
 #include "Config.h"
+#include <x86intrin.h>
 
 using namespace std;
 
@@ -95,18 +96,21 @@ float Node::getActivation(int* indices, float* values, int length, int inputID)
 	    _activeInputs++;
 	}
 
-	_train[inputID]._lastActivations = 0;
+#define PF_STR 32
+
+  float res = _bias;
 	for (int i = 0; i < length; i++)
 	{
-	    _train[inputID]._lastActivations += _weights[indices[i]] * values[i];
+	    res += _weights[indices[i]] * values[i];
+      if (i + PF_STR < length)
+      _mm_prefetch(&_weights[indices[i + PF_STR]], _MM_HINT_T0);
 	}
-	_train[inputID]._lastActivations += _bias;
 
 	switch (_type)
 	{
 	case NodeType::ReLU:
-		if (_train[inputID]._lastActivations < 0) {
-		    _train[inputID]._lastActivations = 0;
+		if (res < 0) {
+        res = 0;
 		    _train[inputID]._lastGradients = 1;
 		    _train[inputID]._lastDeltaforBPs = 0;
 
@@ -122,7 +126,8 @@ float Node::getActivation(int* indices, float* values, int length, int inputID)
 		break;
 	}
 
-	return _train[inputID]._lastActivations;
+  _train[inputID]._lastActivations = res;
+  return res;
 }
 
 
