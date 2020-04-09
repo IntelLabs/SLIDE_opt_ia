@@ -68,7 +68,7 @@ Layer *Network::getLayer(int LayerID) {
 
 
 int Network::predictClass(int **inputIndices, float **inputValues, int *length, int **labels, int *labelsize) {
-    int correctPred = 0;
+    alignas(64) int correctPred = 0;
 
     auto t1 = std::chrono::high_resolution_clock::now();
     #pragma omp parallel for reduction(+:correctPred)
@@ -140,6 +140,9 @@ int Network::ProcessInput(int **inputIndices, float **inputValues, int *lengths,
 //        tmplr *= pow(0.9, iter/10.0);
     }
 
+    std::chrono::high_resolution_clock::time_point t1, t2, t3;
+    if (DEBUG)
+      t1 = std::chrono::high_resolution_clock::now();
     int*** activeNodesPerBatch = new int**[_currentBatchSize];
     float*** activeValuesPerBatch = new float**[_currentBatchSize];
     int** sizesPerBatch = new int*[_currentBatchSize];
@@ -199,8 +202,9 @@ int Network::ProcessInput(int **inputIndices, float **inputValues, int *lengths,
     delete[] activeValuesPerBatch;
     delete[] sizesPerBatch;
 
+    if (DEBUG)
+      t2 = std::chrono::high_resolution_clock::now();
 
-    auto t1 = std::chrono::high_resolution_clock::now();
     bool tmpRehash;
     bool tmpRebuild;
 
@@ -278,8 +282,15 @@ int Network::ProcessInput(int **inputIndices, float **inputValues, int *lengths,
         }
     }
 
-    if (DEBUG&rehash) {
-        cout << "Avg sample size = " << avg_retrieval[0]*1.0/_currentBatchSize<<" "<<avg_retrieval[1]*1.0/_currentBatchSize << endl;
+    if (DEBUG)
+      t3 = std::chrono::high_resolution_clock::now();
+    if (DEBUG && rehash) {
+      float timeDiffInMiliseconds1 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+      std::cout << "Training: FWD/BWD takes " << timeDiffInMiliseconds1/1000 << " milliseconds, ";
+      float timeDiffInMiliseconds2 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count();
+      std::cout << "ADAM takes " << timeDiffInMiliseconds2/1000 << " milliseconds" << std::endl;
+
+      cout << "Avg sample size = " << avg_retrieval[0]*1.0/_currentBatchSize<<" "<<avg_retrieval[1]*1.0/_currentBatchSize << endl;
     }
     return logloss;
 }
