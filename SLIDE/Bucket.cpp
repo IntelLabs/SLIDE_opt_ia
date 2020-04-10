@@ -9,6 +9,13 @@ Bucket::Bucket()
 }
 
 
+void Bucket::reset()
+{
+    isInit = -1;
+    index = 0;
+    _counts = 0;
+}
+
 Bucket::~Bucket()
 {
     delete[] arr;

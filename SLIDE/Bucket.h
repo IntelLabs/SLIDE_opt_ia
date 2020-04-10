@@ -11,6 +11,7 @@ private:
 	
 public:
 	Bucket();
+	void reset();
 	int add(int id);
 	int retrieve(int index);
 	int * getAll();

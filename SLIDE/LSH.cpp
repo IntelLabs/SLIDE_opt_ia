@@ -38,11 +38,9 @@ LSH::LSH(int K, int L, int RangePow)
 
 void LSH::clear()
 {
-    for (int i = 0; i < _L; i++)
-    {
-    	delete[] _bucket[i];
-    	_bucket[i] = new Bucket[1 << _RangePow];
-
+//#pragma omp parallel for
+    for (int i = 0; i < _L; i++) {
+        _bucket[i]->reset();
     }
 }
 
