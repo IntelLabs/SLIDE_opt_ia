@@ -456,12 +456,37 @@ int Layer::queryActiveNodeandComputeActivations(int** activenodesperlayer, float
     }
 
     if(_type == NodeType::Softmax) {
+#if OPT_VEC512
+        constexpr int V = 16;
+        int O = (len + V - 1) / V;
+        int Vr = len % V ? len % V : V;
+        __m512 vec_max = _mm512_set1_ps(maxValue);
+        __m512 vec_sum = _mm512_setzero_ps();
+        __m512 vec_zero = _mm512_setzero_ps();
+        for (int o = 0; o < O; o++) {
+            int Vx = o == O - 1 ? Vr : V;
+            __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+
+            __m512 vec_val = _mm512_maskz_load_ps(k, &activeValuesperlayer[layerIndex + 1][o * V]);
+            vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
+            vec_sum += vec_val;
+            _mm512_mask_storeu_ps(&activeValuesperlayer[layerIndex + 1][o * V], k, vec_val);
+            for (int v = 0; v < Vx; v++) {
+                float val = activeValuesperlayer[layerIndex + 1][o * V + v];
+                _Nodes[activenodesperlayer[layerIndex + 1][o * V + v]].SetlastActivation(inputID, val);
+            }
+        }
+        float sum = _mm512_reduce_add_ps(vec_sum);
+        _normalizationConstants[inputID] = sum;
+#else
+
         for (int i = 0; i < len; i++) {
             float realActivation = exp(activeValuesperlayer[layerIndex + 1][i] - maxValue);
             activeValuesperlayer[layerIndex + 1][i] = realActivation;
             _Nodes[activenodesperlayer[layerIndex + 1][i]].SetlastActivation(inputID, realActivation);
             _normalizationConstants[inputID] += realActivation;
         }
+#endif
     }
 
     return in;

@@ -31,3 +31,5 @@
 #define LOADWEIGHT 0
 
 #define MAPLEN 325056
+
+#define OPT_VEC512 1
