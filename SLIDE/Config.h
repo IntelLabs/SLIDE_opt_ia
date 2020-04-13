@@ -32,4 +32,5 @@
 
 #define MAPLEN 325056
 
+#define OPT_IA 1
 #define OPT_VEC512 1

@@ -3,6 +3,7 @@
 #include <chrono>
 #include "cnpy.h"
 #include <sys/mman.h>
+#include "DataLayerOpt.h"
 
 using namespace std;
 
@@ -23,7 +24,9 @@ public:
 	Network(int* sizesOfLayers, NodeType* layersTypes, int noOfLayers, int batchsize, float lr, int inputdim, int* K, int* L, int* RangePow, float* Sparsity, cnpy::npz_t arr);
 	Layer* getLayer(int LayerID);
 	int predictClass(int ** inputIndices, float ** inputValues, int * length, int ** labels, int *labelsize);
+	int predictClassOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex);
 	int ProcessInput(int** inputIndices, float** inputValues, int* lengths, int ** label, int *labelsize, int iter, bool rehash, bool rebuild);
+  int ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex, int iter, bool rehash, bool rebuild);
 	void saveWeights(string file);
 	~Network();
 	void * operator new(size_t size){
