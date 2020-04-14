@@ -28,6 +28,16 @@ public:
 	float* _adamAvgMom;
 	float* _adamAvgVel;
 	float* _bias;
+
+#if OPT_IA
+  struct NodeDataOpt {
+    int *indices = nullptr;
+    float *values = nullptr;
+    int size = 0;
+  };
+  NodeDataOpt *_nodeDataOpt; // per each record
+#endif
+
 	LSH *_hashTables;
 	WtaHash *_wtaHasher;
     DensifiedMinhash *_MinHasher;
@@ -41,6 +51,7 @@ public:
 	void addtoHashTable(float* weights, int length, float bias, int id);
 	float getNomalizationConstant(int inputID);
 	int queryActiveNodeandComputeActivations(int** activenodesperlayer, float** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
+	int queryActiveNodeandComputeActivationsOpt(int* indices, float* values, int size, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
     int queryActiveNodes(int** activenodesperlayer, float** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
     int computeActivations(int** activenodesperlayer, float** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
     int computeSoftmax(int** activenodesperlayer, float** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);

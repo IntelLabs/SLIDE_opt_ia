@@ -49,6 +49,15 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
         _srp = new SparseRandomProjection(previousLayerNumOfNodes, _K * _L, Ratio);
     }
 
+#if OPT_IA
+    _nodeDataOpt = new NodeDataOpt[_batchsize];
+    for (int i = 0; i < _batchsize; i++) {
+      _nodeDataOpt[i].size = _noOfNodes; // assume dense
+      _nodeDataOpt[i].values = new float[_noOfNodes];
+      _nodeDataOpt[i].indices = new int[_noOfNodes];
+    }
+#endif
+
     if (LOADWEIGHT) {
         _weights = weights;
         _bias = bias;
@@ -492,6 +501,286 @@ int Layer::queryActiveNodeandComputeActivations(int** activenodesperlayer, float
     return in;
 }
 
+
+int Layer::queryActiveNodeandComputeActivationsOpt(
+    int* indices, float* values, int size,
+    int layerID, int inputID, int* label, int labelsize,
+    float Sparsity, int iter) {
+
+  //LSH QueryLogic
+
+  //Beidi. Query out all the candidate nodes
+  int len;
+  int in = 0;
+
+  if (Sparsity == 1.0){
+    len = _noOfNodes;
+    _nodeDataOpt[inputID].size = len;
+    for (int i = 0; i < len; i++) {
+      _nodeDataOpt[inputID].indices[i] = i;
+    }
+  } else {
+    if (Mode==1) {
+      int *hashes;
+      if (HashFunction == 1) {
+        hashes = _wtaHasher->getHash(values);
+      } else if (HashFunction == 2) {
+        hashes = _dwtaHasher->getHash(indices, values, size);
+      } else if (HashFunction == 3) {
+        hashes = _MinHasher->getHashEasy(_binids, values, size, TOPK);
+      } else if (HashFunction == 4) {
+        hashes = _srp->getHashSparse(indices, values, size);
+      }
+      int *hashIndices = _hashTables->hashesToIndex(hashes);
+      int **actives = _hashTables->retrieveRaw(hashIndices);
+
+      // Get candidates from hashtable
+      auto t00 = std::chrono::high_resolution_clock::now();
+
+      std::map<int, size_t> counts;
+      // Make sure that the true label node is in candidates
+      if (_type == NodeType::Softmax) {
+        if (labelsize > 0) {
+          for (int i=0; i<labelsize ;i++){
+            counts[label[i]] = _L;
+          }
+        }
+      }
+
+      for (int i = 0; i < _L; i++) {
+        if (actives[i] == NULL) {
+          continue;
+        } else {
+          for (int j = 0; j < BUCKETSIZE; j++) {
+            int tempID = actives[i][j] - 1;
+            if (tempID >= 0) {
+              counts[tempID] += 1;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+      auto t11 = std::chrono::high_resolution_clock::now();
+
+      //thresholding
+      auto t3 = std::chrono::high_resolution_clock::now();
+      vector<int> vect;
+      for (auto &&x : counts){
+        if (x.second>THRESH){
+          vect.push_back(x.first);
+        }
+      }
+
+      len = vect.size();
+      _nodeDataOpt[inputID].size = len;
+
+      for (int i = 0; i < len; i++) {
+        _nodeDataOpt[inputID].indices[i] = vect[i];
+      }
+      auto t33 = std::chrono::high_resolution_clock::now();
+      in = len;
+
+      delete[] hashes;
+      delete[] hashIndices;
+      delete[] actives;
+
+    }
+    if (Mode==4) {
+      int *hashes;
+      if (HashFunction == 1) {
+        hashes = _wtaHasher->getHash(values);
+      } else if (HashFunction == 2) {
+        hashes = _dwtaHasher->getHash(indices, values, size);
+      } else if (HashFunction == 3) {
+        hashes = _MinHasher->getHashEasy(_binids, values, size, TOPK);
+      } else if (HashFunction == 4) {
+        hashes = _srp->getHashSparse(indices, values, size);
+      }
+      int *hashIndices = _hashTables->hashesToIndex(hashes);
+      int **actives = _hashTables->retrieveRaw(hashIndices);
+      // we now have a sparse array of indices of active nodes
+
+      // Get candidates from hashtable
+      std::map<int, size_t> counts;
+      // Make sure that the true label node is in candidates
+      if (_type == NodeType::Softmax && labelsize > 0) {
+        for (int i = 0; i < labelsize ;i++){
+          counts[label[i]] = _L;
+        }
+      }
+
+      for (int i = 0; i < _L; i++) {
+        if (actives[i] == NULL) {
+          continue;
+        } else {
+          // copy sparse array into (dense) map
+          for (int j = 0; j < BUCKETSIZE; j++) {
+            int tempID = actives[i][j] - 1;
+            if (tempID >= 0) {
+              counts[tempID] += 1;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+
+      in = counts.size();
+      if (counts.size()<1500){
+        srand(time(NULL));
+        size_t start = rand() % _noOfNodes;
+        for (size_t i = start; i < _noOfNodes; i++) {
+          if (counts.size() >= 1000) {
+            break;
+          }
+          if (counts.count(_randNode[i]) == 0) {
+            counts[_randNode[i]] = 0;
+          }
+        }
+
+        if (counts.size() < 1000) {
+          for (size_t i = 0; i < _noOfNodes; i++) {
+            if (counts.size() >= 1000) {
+              break;
+            }
+            if (counts.count(_randNode[i]) == 0) {
+              counts[_randNode[i]] = 0;
+            }
+          }
+        }
+      }
+
+      len = counts.size();
+      _nodeDataOpt[inputID].size = len;
+
+      // copy map into new array
+      int i=0;
+      for (auto &&x : counts) {
+        _nodeDataOpt[inputID].indices[i] = x.first;
+        i++;
+      }
+
+      delete[] hashes;
+      delete[] hashIndices;
+      delete[] actives;
+
+    }
+    else if (Mode == 2 & _type== NodeType::Softmax) {
+      len = floor(_noOfNodes * Sparsity);
+      _nodeDataOpt[inputID].size = len;
+
+      auto t1 = std::chrono::high_resolution_clock::now();
+      bitset <MAPLEN> bs;
+      int tmpsize = 0;
+      if (_type == NodeType::Softmax) {
+        if (labelsize > 0) {
+          for (int i=0; i<labelsize ;i++){
+            _nodeDataOpt[inputID].indices[i] = label[i];
+            bs[label[i]] = 1;
+          }
+          tmpsize = labelsize;
+        }
+      }
+
+      while(tmpsize<len){
+        int v = rand() % _noOfNodes;
+        if(bs[v]==0) {
+          _nodeDataOpt[inputID].indices[tmpsize] = v;
+          bs[v]=1;
+          tmpsize++;
+        }
+      }
+
+
+
+      auto t2 = std::chrono::high_resolution_clock::now();
+      //            std::cout << "sampling "<<" takes" << 1.0 * timeDiffInMiliseconds << std::endl;
+
+    }
+
+    else if (Mode==3 & _type== NodeType::Softmax){
+
+      len = floor(_noOfNodes * Sparsity);
+      _nodeDataOpt[inputID].size = len;
+      vector<pair<float, int> > sortW;
+      int what = 0;
+
+      for (size_t s = 0; s < _noOfNodes; s++) {
+        float tmp = innerproduct(indices, values, size, _Nodes[s]._weights);
+        tmp += _Nodes[s]._bias;
+        if (find(label, label + labelsize, s) != label + labelsize) {
+          sortW.push_back(make_pair(-1000000000, s));
+          what++;
+        }
+        else{
+          sortW.push_back(make_pair(-tmp, s));
+        }
+      }
+
+      std::sort(begin(sortW), end(sortW));
+
+      for (int i = 0; i < len; i++) {
+        _nodeDataOpt[inputID].indices[i] = sortW[i].second;
+        if (find (label, label+labelsize, sortW[i].second)!= label+labelsize){
+          in=1;
+        }
+      }
+    }
+  }
+
+  //***********************************
+  float maxValue = 0;
+  if (_type == NodeType::Softmax)
+    _normalizationConstants[inputID] = 0;
+
+  // find activation for all ACTIVE nodes in layer
+  for (int i = 0; i < len; i++)
+  {
+    _nodeDataOpt[inputID].values[i] = _Nodes[_nodeDataOpt[inputID].indices[i]].getActivation(indices, values, size, inputID);
+    if(_type == NodeType::Softmax && _nodeDataOpt[inputID].values[i] > maxValue){
+      maxValue = _nodeDataOpt[inputID].values[i];
+    }
+  }
+
+  if(_type == NodeType::Softmax) {
+#if OPT_VEC512
+    constexpr int V = 16;
+    int O = (len + V - 1) / V;
+    int Vr = len % V ? len % V : V;
+    __m512 vec_max = _mm512_set1_ps(maxValue);
+    __m512 vec_sum = _mm512_setzero_ps();
+    __m512 vec_zero = _mm512_setzero_ps();
+    for (int o = 0; o < O; o++) {
+      int Vx = o == O - 1 ? Vr : V;
+      __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+
+      __m512 vec_val = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o * V]);
+      vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
+      vec_sum += vec_val;
+      _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o * V], k, vec_val);
+      for (int v = 0; v < Vx; v++) {
+        float val = _nodeDataOpt[inputID].values[o * V + v];
+        _Nodes[_nodeDataOpt[inputID].indices[o * V + v]].SetlastActivation(inputID, val);
+      }
+    }
+    float sum = _mm512_reduce_add_ps(vec_sum);
+    _normalizationConstants[inputID] = sum;
+#else
+
+    for (int i = 0; i < len; i++) {
+      float realActivation = exp(_nodeDataOpt[inputID].values[i] - maxValue);
+      _nodeDataOpt[inputID].values[i] = realActivation;
+      _Nodes[_nodeDataOpt[inputID].indices[i]].SetlastActivation(inputID, realActivation);
+      _normalizationConstants[inputID] += realActivation;
+    }
+#endif
+  }
+
+  return in;
+}
+
+
 void Layer::saveWeights(string file)
 {
     if (_layerID==0) {
@@ -522,6 +811,15 @@ Layer::~Layer()
             delete[] _normalizationConstants;
         }
     }
+
+#if OPT_IA
+    for (int i = 0; i < _batchsize; i++) {
+      delete[] _nodeDataOpt[i].values;
+      delete[] _nodeDataOpt[i].indices;
+    }
+    delete[] _nodeDataOpt;
+#endif
+
     delete [] _Nodes;
     delete [] _weights;
     delete [] _bias;

@@ -72,47 +72,45 @@ int Network::predictClassOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex) {
   auto t1 = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for reduction(+:correctPred)
   for (int i = 0; i < _currentBatchSize; i++) {
-    int **activenodesperlayer = new int *[_numberOfLayers + 1]();
-    float **activeValuesperlayer = new float *[_numberOfLayers + 1]();
-    int *sizes = new int[_numberOfLayers + 1]();
+    int size;
+    int *indices;
+    float *values;
+    size_t recordIndex = batchIndex * _currentBatchSize + i;
+    int *labels = dataLayerOpt.labelsByRecordIndex(recordIndex);
+    int labelSize = dataLayerOpt.labelLengthByRecordIndex(recordIndex);
 
-    size_t n = batchIndex * _currentBatchSize + i;
-    activenodesperlayer[0] = dataLayerOpt.indicesByRecordIndex(n);
-    activeValuesperlayer[0] = dataLayerOpt.valuesByRecordIndex(n);
-    sizes[0] = dataLayerOpt.lengthByRecordIndex(n);
-    int *labels = dataLayerOpt.labelsByRecordIndex(n);
-    int labelSize = dataLayerOpt.labelLengthByRecordIndex(n);
-
-    //inference
+    // inference
     for (int j = 0; j < _numberOfLayers; j++) {
-      _hiddenlayers[j]->queryActiveNodeandComputeActivations(
-          activenodesperlayer, activeValuesperlayer, sizes, j, i, labels, 0,
-          _Sparsity[_numberOfLayers+j], -1);
+      if (j == 0) { // data layer
+        size = dataLayerOpt.lengthByRecordIndex(recordIndex);
+        indices = dataLayerOpt.indicesByRecordIndex(recordIndex);
+        values = dataLayerOpt.valuesByRecordIndex(recordIndex);
+      } else { // prev layer
+        size = _hiddenlayers[j - 1]->_nodeDataOpt[i].size;
+        indices = _hiddenlayers[j - 1]->_nodeDataOpt[i].indices;
+        values = _hiddenlayers[j - 1]->_nodeDataOpt[i].values;
+      }
+      _hiddenlayers[j]->queryActiveNodeandComputeActivationsOpt(
+          indices, values, size, // input XXX
+          j, i, labels, 0, _Sparsity[_numberOfLayers + j], -1);
     }
 
-    //compute softmax
-    int noOfClasses = sizes[_numberOfLayers];
+    // compute softmax
+    int noOfClasses = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[i].size;
     float max_act = -222222222;
     int predict_class = -1;
     for (int k = 0; k < noOfClasses; k++) {
-      float cur_act = _hiddenlayers[_numberOfLayers - 1]->getNodebyID(activenodesperlayer[_numberOfLayers][k])->getLastActivation(i);
+      float cur_act = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[i].values[k];
+      //float cur_act = _hiddenlayers[_numberOfLayers - 1]->getNodebyID(activenodesperlayer[_numberOfLayers][k])->getLastActivation(i);
       if (max_act < cur_act) {
         max_act = cur_act;
-        predict_class = activenodesperlayer[_numberOfLayers][k];
+        predict_class = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[i].indices[k];
       }
     }
 
-    if (std::find (labels, labels+labelSize, predict_class)!= labels+labelSize) {
+    if (std::find(labels, labels + labelSize, predict_class) != labels + labelSize) {
       correctPred++;
     }
-
-    delete[] sizes;
-    for (int j = 1; j < _numberOfLayers + 1; j++) {
-      delete[] activenodesperlayer[j];
-      delete[] activeValuesperlayer[j];
-    }
-    delete[] activenodesperlayer;
-    delete[] activeValuesperlayer;
   }
   auto t2 = std::chrono::high_resolution_clock::now();
   float timeDiffInMiliseconds = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
