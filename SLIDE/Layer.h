@@ -29,14 +29,12 @@ public:
 	float* _adamAvgVel;
 	float* _bias;
 
-#if OPT_IA
   struct NodeDataOpt {
     int *indices = nullptr;
     float *values = nullptr;
     int size = 0;
   };
   NodeDataOpt *_nodeDataOpt; // per each record
-#endif
 
 	LSH *_hashTables;
 	WtaHash *_wtaHasher;

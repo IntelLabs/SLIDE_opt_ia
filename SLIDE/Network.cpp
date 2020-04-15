@@ -373,31 +373,31 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
   std::chrono::high_resolution_clock::time_point t1, t2, t3;
   if (DEBUG)
     t1 = std::chrono::high_resolution_clock::now();
-  int*** activeNodesPerBatch = new int**[_currentBatchSize];
-  float*** activeValuesPerBatch = new float**[_currentBatchSize];
-  int** sizesPerBatch = new int*[_currentBatchSize];
+
 #pragma omp parallel for
   for (int i = 0; i < _currentBatchSize; i++) {
-    int **activenodesperlayer = new int *[_numberOfLayers + 1]();
-    float **activeValuesperlayer = new float *[_numberOfLayers + 1]();
-    int *sizes = new int[_numberOfLayers + 1]();
-
-    activeNodesPerBatch[i] = activenodesperlayer;
-    activeValuesPerBatch[i] = activeValuesperlayer;
-    sizesPerBatch[i] = sizes;
-
-    size_t n = batchIndex * _currentBatchSize + i;
-    activenodesperlayer[0] = dataLayerOpt.indicesByRecordIndex(n);
-    activeValuesperlayer[0] = dataLayerOpt.valuesByRecordIndex(n);
-    sizes[0] = dataLayerOpt.lengthByRecordIndex(n);
-    int *labels = dataLayerOpt.labelsByRecordIndex(n);
-    int labelSize = dataLayerOpt.labelLengthByRecordIndex(n);
+    size_t recordIndex = batchIndex * _currentBatchSize + i;
+    int *labels = dataLayerOpt.labelsByRecordIndex(recordIndex);
+    int labelSize = dataLayerOpt.labelLengthByRecordIndex(recordIndex);
     int in;
     //auto t1 = std::chrono::high_resolution_clock::now();
+
+    int size;
+    int *indices;
+    float *values;
     for (int j = 0; j < _numberOfLayers; j++) {
-      in = _hiddenlayers[j]->queryActiveNodeandComputeActivations(
-          activenodesperlayer, activeValuesperlayer,
-          sizes, j, i, labels, labelSize,
+      if (j == 0) {
+        size = dataLayerOpt.lengthByRecordIndex(recordIndex);
+        indices = dataLayerOpt.indicesByRecordIndex(recordIndex);
+        values = dataLayerOpt.valuesByRecordIndex(recordIndex);
+      } else {
+        size = _hiddenlayers[j - 1]->_nodeDataOpt[i].size;
+        indices = _hiddenlayers[j - 1]->_nodeDataOpt[i].indices;
+        values = _hiddenlayers[j - 1]->_nodeDataOpt[i].values;
+      }
+      in = _hiddenlayers[j]->queryActiveNodeandComputeActivationsOpt(
+          indices, values, size,
+          j, i, labels, labelSize,
           _Sparsity[j], iter*_currentBatchSize+i);
       avg_retrieval[j] += in;
     }
@@ -408,37 +408,26 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
       Layer* layer = _hiddenlayers[j];
       Layer* prev_layer = _hiddenlayers[j - 1];
       // nodes
-      for (int k = 0; k < sizesPerBatch[i][j + 1]; k++) {
-        Node* node = layer->getNodebyID(activeNodesPerBatch[i][j + 1][k]);
+      for (int k = 0; k < layer->_nodeDataOpt[i].size; k++) {
+        Node* node = layer->getNodebyID(layer->_nodeDataOpt[i].indices[k]);
         if (j == _numberOfLayers - 1) {
           //TODO: Compute Extra stats: labels
-          node->ComputeExtaStatsForSoftMax(layer->getNomalizationConstant(i), i, labels, labelSize);
+          node->ComputeExtaStatsForSoftMax(layer->getNomalizationConstant(i),
+                                           i, labels, labelSize);
         }
         if (j != 0) {
-          node->backPropagate(prev_layer->getAllNodes(), activeNodesPerBatch[i][j], sizesPerBatch[i][j], tmplr, i);
+          node->backPropagate(prev_layer->getAllNodes(),
+                              prev_layer->_nodeDataOpt[i].indices,
+                              prev_layer->_nodeDataOpt[i].size, tmplr, i);
         } else {
-          node->backPropagateFirstLayer(dataLayerOpt.indicesByRecordIndex(n), //inputIndices[i],
-                                        dataLayerOpt.valuesByRecordIndex(n), //inputValues[i],
-                                        dataLayerOpt.lengthByRecordIndex(n), //lengths[i],
+          node->backPropagateFirstLayer(dataLayerOpt.indicesByRecordIndex(recordIndex),
+                                        dataLayerOpt.valuesByRecordIndex(recordIndex),
+                                        dataLayerOpt.lengthByRecordIndex(recordIndex),
                                         tmplr, i);
         }
       }
     }
   }
-  for (int i = 0; i < _currentBatchSize; i++) {
-    //Free memory to avoid leaks
-    delete[] sizesPerBatch[i];
-    for (int j = 1; j < _numberOfLayers + 1; j++) {
-      delete[] activeNodesPerBatch[i][j];
-      delete[] activeValuesPerBatch[i][j];
-    }
-    delete[] activeNodesPerBatch[i];
-    delete[] activeValuesPerBatch[i];
-  }
-
-  delete[] activeNodesPerBatch;
-  delete[] activeValuesPerBatch;
-  delete[] sizesPerBatch;
 
   if (DEBUG)
     t2 = std::chrono::high_resolution_clock::now();
