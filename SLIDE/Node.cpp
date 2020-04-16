@@ -108,7 +108,7 @@ float Node::getActivation(int* indices, float* values, int length, int inputID)
 
 	switch (_type)
 	{
-	case NodeType::ReLU:
+	case NodeType::ReLU: // TODO
 		if (res < 0) {
         res = 0;
 		    _train[inputID]._lastGradients = 1;
@@ -153,7 +153,6 @@ void Node::ComputeExtaStatsForSoftMaxOpt(float &value, float &grad, float normal
 	value /= normalizationConstant + 0.0000001;
 
 	//TODO:check  gradient
-	_train[inputID]._lastGradients = 1;
 	if (find (label, label+labelsize, _IDinLayer)!= label+labelsize) {
 	    grad = (1.0/labelsize - value) / _currentBatchsize;
 	}
