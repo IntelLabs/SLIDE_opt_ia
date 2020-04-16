@@ -56,6 +56,7 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
       _nodeDataOpt[i].indices = new int[_noOfNodes];
       _nodeDataOpt[i].values = new float[_noOfNodes];
       _nodeDataOpt[i].grads = new float[_noOfNodes];
+      _nodeDataOpt[i].active = new bool[_noOfNodes];
     }
 #endif
 
@@ -71,6 +72,10 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
     }else{
         _weights = new float[_noOfNodes * previousLayerNumOfNodes]();
         _bias = new float[_noOfNodes];
+#if OPT_IA
+        _weightGrads = new float[_noOfNodes * previousLayerNumOfNodes]();
+        _biasGrads = new float[_noOfNodes];
+#endif
         random_device rd;
         default_random_engine dre(rd());
         normal_distribution<float> distribution(0.0, 0.01);
@@ -84,6 +89,10 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
             _adamAvgMom = new float[_noOfNodes * previousLayerNumOfNodes]();
             _adamAvgVel = new float[_noOfNodes * previousLayerNumOfNodes]();
 
+#if OPT_IA
+            _adamAvgMomBias = new float[_noOfNodes]();
+            _adamAvgVelBias = new float[_noOfNodes]();
+#endif
         }
     }
 
@@ -736,11 +745,42 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
     _normalizationConstants[inputID] = 0;
 
   // find activation for all ACTIVE nodes in layer
-  for (int i = 0; i < len; i++)
+  for (int oc = 0; oc < len; oc++)
   {
-    _nodeDataOpt[inputID].values[i] = _Nodes[_nodeDataOpt[inputID].indices[i]].getActivation(indices, values, size, inputID);
-    if(_type == NodeType::Softmax && _nodeDataOpt[inputID].values[i] > maxValue){
-      maxValue = _nodeDataOpt[inputID].values[i];
+    bool &active = _nodeDataOpt[inputID].active[oc];
+    float &grad = _nodeDataOpt[inputID].grads[oc];
+    float &value = _nodeDataOpt[inputID].values[oc];
+    int oc_index = _nodeDataOpt[inputID].indices[oc];
+    float *w = &_weights[oc_index * _previousLayerNumOfNodes];
+
+    if (!active) active = true; // initialize active to false;
+#define PF_STR 32
+    float res = _bias[oc_index];
+    for (int ic = 0; ic < size; ic++)
+    {
+      res += w[indices[ic]] * values[ic];
+      if (ic + PF_STR < size)
+        _mm_prefetch(&w[indices[ic + PF_STR]], _MM_HINT_T0);
+    }
+
+    switch (_type)
+    {
+    case NodeType::ReLU:
+      if (res < 0) {
+        res = 0;
+        grad = 0;
+      }
+      break;
+    case NodeType::Softmax:
+      break;
+    default:
+      cout << "Invalid Node type from Constructor" <<endl;
+      break;
+    }
+    value = res;
+
+    if(_type == NodeType::Softmax && _nodeDataOpt[inputID].values[oc] > maxValue){
+      maxValue = _nodeDataOpt[inputID].values[oc];
     }
   }
 
@@ -814,13 +854,20 @@ Layer::~Layer()
       delete[] _nodeDataOpt[i].values;
       delete[] _nodeDataOpt[i].indices;
       delete[] _nodeDataOpt[i].grads;
+      delete[] _nodeDataOpt[i].active;
     }
     delete[] _nodeDataOpt;
+    delete[] _adamAvgMomBias;
+    delete[] _adamAvgVelBias;
+    delete[] _weightGrads;
+    delete[] _biasGrads;
 #endif
 
-    delete [] _Nodes;
-    delete [] _weights;
-    delete [] _bias;
+    delete[] _adamAvgMom;
+    delete[] _adamAvgVel;
+    delete[] _Nodes;
+    delete[] _weights;
+    delete[] _bias;
 
     delete _wtaHasher;
     delete _dwtaHasher;

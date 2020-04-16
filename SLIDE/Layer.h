@@ -17,22 +17,28 @@ private:
 	Node* _Nodes;
 	int * _randNode;
 	float* _normalizationConstants;
-    int _K, _L, _RangeRow, _previousLayerNumOfNodes, _batchsize;
+    int _K, _L, _RangeRow, _batchsize;
     train* _train_array;
 
 
 public:
 	int _layerID, _noOfActive;
+  size_t _previousLayerNumOfNodes;
 	size_t _noOfNodes;
 	float* _weights;
+  float* _weightGrads;
 	float* _adamAvgMom;
 	float* _adamAvgVel;
 	float* _bias;
+  float* _biasGrads;
+  float* _adamAvgMomBias;
+  float* _adamAvgVelBias;
 
   struct NodeDataOpt {
     int *indices = nullptr;
     float *values = nullptr;
     float *grads = nullptr;
+    bool *active = nullptr;
     int size = 0;
   };
   NodeDataOpt *_nodeDataOpt; // per each record
