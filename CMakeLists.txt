@@ -42,10 +42,12 @@ ENDIF()
 
 # Enable ICC & AVX512 build
 if (CMAKE_CXX_COMPILER MATCHES "icpc")
+  set(__opt_flags "-O2 -DNDEBUG")
   list(APPEND __opt_flags "-xHost")
   list(APPEND __opt_flags "-qopt-zmm-usage=high")
   list(APPEND __opt_flags "-no-inline-max-size")
   list(APPEND __opt_flags "-no-inline-max-total-size")
+  add_definitions(${__opt_flags})
 endif()
 
 # build dependencies
