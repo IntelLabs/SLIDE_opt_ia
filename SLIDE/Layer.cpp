@@ -759,10 +759,6 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
       vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
       vec_sum += vec_val;
       _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o * V], k, vec_val);
-      for (int v = 0; v < Vx; v++) {
-        float val = _nodeDataOpt[inputID].values[o * V + v];
-        _Nodes[_nodeDataOpt[inputID].indices[o * V + v]].SetlastActivation(inputID, val);
-      }
     }
     float sum = _mm512_reduce_add_ps(vec_sum);
     _normalizationConstants[inputID] = sum;

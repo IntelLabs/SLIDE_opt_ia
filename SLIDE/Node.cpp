@@ -126,7 +126,6 @@ float Node::getActivation(int* indices, float* values, int length, int inputID)
 		break;
 	}
 
-  _train[inputID]._lastActivations = res;
   return res;
 }
 
@@ -147,6 +146,21 @@ void Node::ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, 
 	}
 }
 
+void Node::ComputeExtaStatsForSoftMaxOpt(float &value, float normalizationConstant, int inputID, int* label, int labelsize)
+{
+	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds ==1));
+
+	value /= normalizationConstant + 0.0000001;
+
+	//TODO:check  gradient
+	_train[inputID]._lastGradients = 1;
+	if (find (label, label+labelsize, _IDinLayer)!= label+labelsize) {
+	    _train[inputID]._lastDeltaforBPs = (1.0/labelsize - value) / _currentBatchsize;
+	}
+	else {
+	    _train[inputID]._lastDeltaforBPs = (-value) / _currentBatchsize;
+	}
+}
 
 void Node::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
 {
@@ -187,6 +201,48 @@ void Node::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, i
 
 }
 
+void Node::backPropagateOpt(float &value, float *prevValues, Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
+{
+	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
+	for (int i = 0; i < previousLayerActiveNodeSize; i++)
+	{
+		//UpdateDelta before updating weights
+	    Node* prev_node = &(previousNodes[previousLayerActiveNodeIds[i]]);
+      if (prevValues[i] > 0) {
+        prev_node->_train[inputID]._lastDeltaforBPs += _train[inputID]._lastDeltaforBPs * _weights[previousLayerActiveNodeIds[i]];
+      }
+
+
+		float grad_t = _train[inputID]._lastDeltaforBPs * prevValues[i];
+
+		if (ADAM)
+		{
+			_t[previousLayerActiveNodeIds[i]] += grad_t;
+		}
+		else
+		{
+			_mirrorWeights[previousLayerActiveNodeIds[i]] += learningRate * grad_t;
+		}
+	}
+
+	if (ADAM)
+	{
+		float biasgrad_t = _train[inputID]._lastDeltaforBPs;
+		float biasgrad_tsq = biasgrad_t * biasgrad_t;
+		_tbias += biasgrad_t;
+	}
+	else
+    {
+        _mirrorbias += learningRate * _train[inputID]._lastDeltaforBPs;
+    }
+
+	_train[inputID]._ActiveinputIds = 0;
+	_train[inputID]._lastDeltaforBPs = 0;
+  value = 0;
+	_activeInputs--;
+
+}
+
 
 void Node::backPropagateFirstLayer(int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID)
 {
@@ -221,6 +277,41 @@ void Node::backPropagateFirstLayer(int* nnzindices, float* nnzvalues, int nnzSiz
 	_train[inputID]._lastActivations = 0;
     _activeInputs--;
 }
+
+void Node::backPropagateFirstLayerOpt(float &value, int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID)
+{
+	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
+	for (int i = 0; i < nnzSize; i++)
+	{
+		float grad_t = _train[inputID]._lastDeltaforBPs * nnzvalues[i];
+		float grad_tsq = grad_t * grad_t;
+		if (ADAM)
+		{
+			_t[nnzindices[i]] += grad_t;
+		}
+		else
+		{
+			_mirrorWeights[nnzindices[i]] += learningRate * grad_t;
+		}
+	}
+
+	if (ADAM)
+	{
+		float biasgrad_t = _train[inputID]._lastDeltaforBPs;
+		float biasgrad_tsq = biasgrad_t * biasgrad_t;
+		_tbias += biasgrad_t;
+	}
+	else
+	{
+		_mirrorbias += learningRate * _train[inputID]._lastDeltaforBPs;
+	}
+
+	_train[inputID]._ActiveinputIds = 0;//deactivate inputIDs
+	_train[inputID]._lastDeltaforBPs = 0;
+  value = 0;
+    _activeInputs--;
+}
+
 
 void Node::SetlastActivation(int inputID, float realActivation)
 {

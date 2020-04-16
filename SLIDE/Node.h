@@ -98,8 +98,11 @@ public:
 	bool getActiveInputs(void);
 	void SetlastActivation(int inputID, float realActivation);
 	void ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, int* label, int labelsize);
+	void ComputeExtaStatsForSoftMaxOpt(float &value, float normalizationConstant, int inputID, int* label, int labelsize);
 	void backPropagate(Node* previousNodes,int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID);
+	void backPropagateOpt(float &value, float *prevValues, Node* previousNodes,int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID);
 	void backPropagateFirstLayer(int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID);
+	void backPropagateFirstLayerOpt(float &value, int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID);
 	~Node();
 
     void * operator new(size_t size){

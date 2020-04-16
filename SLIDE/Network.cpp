@@ -412,18 +412,22 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
         Node* node = layer->getNodebyID(layer->_nodeDataOpt[i].indices[k]);
         if (j == _numberOfLayers - 1) {
           //TODO: Compute Extra stats: labels
-          node->ComputeExtaStatsForSoftMax(layer->getNomalizationConstant(i),
-                                           i, labels, labelSize);
+          node->ComputeExtaStatsForSoftMaxOpt(layer->_nodeDataOpt[i].values[k],
+                                              layer->getNomalizationConstant(i),
+                                              i, labels, labelSize);
         }
         if (j != 0) {
-          node->backPropagate(prev_layer->getAllNodes(),
-                              prev_layer->_nodeDataOpt[i].indices,
-                              prev_layer->_nodeDataOpt[i].size, tmplr, i);
+          node->backPropagateOpt(layer->_nodeDataOpt[i].values[k],
+                                 prev_layer->_nodeDataOpt[i].values,
+                                 prev_layer->getAllNodes(),
+                                 prev_layer->_nodeDataOpt[i].indices,
+                                 prev_layer->_nodeDataOpt[i].size, tmplr, i);
         } else {
-          node->backPropagateFirstLayer(dataLayerOpt.indicesByRecordIndex(recordIndex),
-                                        dataLayerOpt.valuesByRecordIndex(recordIndex),
-                                        dataLayerOpt.lengthByRecordIndex(recordIndex),
-                                        tmplr, i);
+          node->backPropagateFirstLayerOpt(layer->_nodeDataOpt[i].values[k],
+                                           dataLayerOpt.indicesByRecordIndex(recordIndex),
+                                           dataLayerOpt.valuesByRecordIndex(recordIndex),
+                                           dataLayerOpt.lengthByRecordIndex(recordIndex),
+                                           tmplr, i);
         }
       }
     }
