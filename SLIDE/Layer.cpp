@@ -53,8 +53,9 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
     _nodeDataOpt = new NodeDataOpt[_batchsize];
     for (int i = 0; i < _batchsize; i++) {
       _nodeDataOpt[i].size = _noOfNodes; // assume dense
-      _nodeDataOpt[i].values = new float[_noOfNodes];
       _nodeDataOpt[i].indices = new int[_noOfNodes];
+      _nodeDataOpt[i].values = new float[_noOfNodes];
+      _nodeDataOpt[i].grads = new float[_noOfNodes];
     }
 #endif
 
@@ -812,6 +813,7 @@ Layer::~Layer()
     for (int i = 0; i < _batchsize; i++) {
       delete[] _nodeDataOpt[i].values;
       delete[] _nodeDataOpt[i].indices;
+      delete[] _nodeDataOpt[i].grads;
     }
     delete[] _nodeDataOpt;
 #endif

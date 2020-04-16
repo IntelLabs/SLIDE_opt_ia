@@ -32,6 +32,7 @@ public:
   struct NodeDataOpt {
     int *indices = nullptr;
     float *values = nullptr;
+    float *grads = nullptr;
     int size = 0;
   };
   NodeDataOpt *_nodeDataOpt; // per each record

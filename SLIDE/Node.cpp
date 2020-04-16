@@ -146,7 +146,7 @@ void Node::ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, 
 	}
 }
 
-void Node::ComputeExtaStatsForSoftMaxOpt(float &value, float normalizationConstant, int inputID, int* label, int labelsize)
+void Node::ComputeExtaStatsForSoftMaxOpt(float &value, float &grad, float normalizationConstant, int inputID, int* label, int labelsize)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds ==1));
 
@@ -155,10 +155,10 @@ void Node::ComputeExtaStatsForSoftMaxOpt(float &value, float normalizationConsta
 	//TODO:check  gradient
 	_train[inputID]._lastGradients = 1;
 	if (find (label, label+labelsize, _IDinLayer)!= label+labelsize) {
-	    _train[inputID]._lastDeltaforBPs = (1.0/labelsize - value) / _currentBatchsize;
+	    grad = (1.0/labelsize - value) / _currentBatchsize;
 	}
 	else {
-	    _train[inputID]._lastDeltaforBPs = (-value) / _currentBatchsize;
+	    grad = (-value) / _currentBatchsize;
 	}
 }
 
@@ -201,7 +201,7 @@ void Node::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, i
 
 }
 
-void Node::backPropagateOpt(float &value, float *prevValues, Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
+void Node::backPropagateOpt(float &value, float &grad, float *prevValues, float *prevGrads, Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < previousLayerActiveNodeSize; i++)
@@ -209,11 +209,11 @@ void Node::backPropagateOpt(float &value, float *prevValues, Node* previousNodes
 		//UpdateDelta before updating weights
 	    Node* prev_node = &(previousNodes[previousLayerActiveNodeIds[i]]);
       if (prevValues[i] > 0) {
-        prev_node->_train[inputID]._lastDeltaforBPs += _train[inputID]._lastDeltaforBPs * _weights[previousLayerActiveNodeIds[i]];
+        prevGrads[i] += grad * _weights[previousLayerActiveNodeIds[i]];
       }
 
 
-		float grad_t = _train[inputID]._lastDeltaforBPs * prevValues[i];
+		float grad_t = grad * prevValues[i];
 
 		if (ADAM)
 		{
@@ -227,17 +227,17 @@ void Node::backPropagateOpt(float &value, float *prevValues, Node* previousNodes
 
 	if (ADAM)
 	{
-		float biasgrad_t = _train[inputID]._lastDeltaforBPs;
+		float biasgrad_t = grad;
 		float biasgrad_tsq = biasgrad_t * biasgrad_t;
 		_tbias += biasgrad_t;
 	}
 	else
     {
-        _mirrorbias += learningRate * _train[inputID]._lastDeltaforBPs;
+        _mirrorbias += learningRate * grad;
     }
 
 	_train[inputID]._ActiveinputIds = 0;
-	_train[inputID]._lastDeltaforBPs = 0;
+	grad = 0;
   value = 0;
 	_activeInputs--;
 
@@ -278,12 +278,12 @@ void Node::backPropagateFirstLayer(int* nnzindices, float* nnzvalues, int nnzSiz
     _activeInputs--;
 }
 
-void Node::backPropagateFirstLayerOpt(float &value, int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID)
+void Node::backPropagateFirstLayerOpt(float &value, float &grad, int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < nnzSize; i++)
 	{
-		float grad_t = _train[inputID]._lastDeltaforBPs * nnzvalues[i];
+		float grad_t = grad * nnzvalues[i];
 		float grad_tsq = grad_t * grad_t;
 		if (ADAM)
 		{
@@ -297,17 +297,17 @@ void Node::backPropagateFirstLayerOpt(float &value, int* nnzindices, float* nnzv
 
 	if (ADAM)
 	{
-		float biasgrad_t = _train[inputID]._lastDeltaforBPs;
+		float biasgrad_t = grad;
 		float biasgrad_tsq = biasgrad_t * biasgrad_t;
 		_tbias += biasgrad_t;
 	}
 	else
 	{
-		_mirrorbias += learningRate * _train[inputID]._lastDeltaforBPs;
+		_mirrorbias += learningRate * grad;
 	}
 
 	_train[inputID]._ActiveinputIds = 0;//deactivate inputIDs
-	_train[inputID]._lastDeltaforBPs = 0;
+	grad = 0;
   value = 0;
     _activeInputs--;
 }
