@@ -71,40 +71,39 @@ int Network::predictClassOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex) {
 
   auto t1 = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for reduction(+:correctPred)
-  for (int i = 0; i < _currentBatchSize; i++) {
-    int size;
-    int *indices;
-    float *values;
-    size_t recordIndex = batchIndex * _currentBatchSize + i;
+  for (int n = 0; n < _currentBatchSize; n++) {
+    int ICI;
+    int *in_indices;
+    float *in_values;
+    size_t recordIndex = batchIndex * _currentBatchSize + n;
     int *labels = dataLayerOpt.labelsByRecordIndex(recordIndex);
     int labelSize = dataLayerOpt.labelLengthByRecordIndex(recordIndex);
 
     // inference
-    for (int j = 0; j < _numberOfLayers; j++) {
-      if (j == 0) { // data layer
-        size = dataLayerOpt.lengthByRecordIndex(recordIndex);
-        indices = dataLayerOpt.indicesByRecordIndex(recordIndex);
-        values = dataLayerOpt.valuesByRecordIndex(recordIndex);
+    for (int l = 0; l < _numberOfLayers; l++) {
+      if (l == 0) { // data layer
+        ICI = dataLayerOpt.lengthByRecordIndex(recordIndex);
+        in_indices = dataLayerOpt.indicesByRecordIndex(recordIndex);
+        in_values = dataLayerOpt.valuesByRecordIndex(recordIndex);
       } else { // prev layer
-        size = _hiddenlayers[j - 1]->_nodeDataOpt[i].size;
-        indices = _hiddenlayers[j - 1]->_nodeDataOpt[i].indices;
-        values = _hiddenlayers[j - 1]->_nodeDataOpt[i].values;
+        ICI = _hiddenlayers[l - 1]->_nodeDataOpt[n].size;
+        in_indices = _hiddenlayers[l - 1]->_nodeDataOpt[n].indices;
+        in_values = _hiddenlayers[l - 1]->_nodeDataOpt[n].values;
       }
-      _hiddenlayers[j]->queryActiveNodeandComputeActivationsOpt(
-          indices, values, size, // input XXX
-          j, i, labels, 0, _Sparsity[_numberOfLayers + j], -1);
+      _hiddenlayers[l]->queryActiveNodeandComputeActivationsOpt(
+          in_indices, in_values, ICI,
+          l, n, labels, 0, _Sparsity[_numberOfLayers + l], -1);
     }
 
     // compute softmax
-    int noOfClasses = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[i].size;
+    int noOfClasses = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].size;
     float max_act = -222222222;
     int predict_class = -1;
     for (int k = 0; k < noOfClasses; k++) {
-      float cur_act = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[i].values[k];
-      //float cur_act = _hiddenlayers[_numberOfLayers - 1]->getNodebyID(activenodesperlayer[_numberOfLayers][k])->getLastActivation(i);
+      float cur_act = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].values[k];
       if (max_act < cur_act) {
         max_act = cur_act;
-        predict_class = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[i].indices[k];
+        predict_class = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].indices[k];
       }
     }
 
@@ -380,24 +379,22 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
     int *labels = dataLayerOpt.labelsByRecordIndex(recordIndex);
     int labelSize = dataLayerOpt.labelLengthByRecordIndex(recordIndex);
     int in;
-    //auto t1 = std::chrono::high_resolution_clock::now();
 
-    int size;
-    int *indices;
-    float *values;
+    int ICI;
+    int *in_indices;
+    float *in_values;
     for (int l = 0; l < _numberOfLayers; l++) {
       if (l == 0) {
-        size = dataLayerOpt.lengthByRecordIndex(recordIndex);
-        indices = dataLayerOpt.indicesByRecordIndex(recordIndex);
-        values = dataLayerOpt.valuesByRecordIndex(recordIndex);
+        ICI = dataLayerOpt.lengthByRecordIndex(recordIndex);
+        in_indices = dataLayerOpt.indicesByRecordIndex(recordIndex);
+        in_values = dataLayerOpt.valuesByRecordIndex(recordIndex);
       } else {
-        size = _hiddenlayers[l - 1]->_nodeDataOpt[n].size;
-        indices = _hiddenlayers[l - 1]->_nodeDataOpt[n].indices;
-        values = _hiddenlayers[l - 1]->_nodeDataOpt[n].values;
+        ICI = _hiddenlayers[l - 1]->_nodeDataOpt[n].size;
+        in_indices = _hiddenlayers[l - 1]->_nodeDataOpt[n].indices;
+        in_values = _hiddenlayers[l - 1]->_nodeDataOpt[n].values;
       }
       in = _hiddenlayers[l]->queryActiveNodeandComputeActivationsOpt(
-          indices, values, size,
-          l, n, labels, labelSize,
+          in_indices, in_values, ICI, l, n, labels, labelSize,
           _Sparsity[l], iter*_currentBatchSize+n);
       avg_retrieval[l] += in;
     }
@@ -407,15 +404,16 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
     for (int l = _numberOfLayers - 1; l >= 0; l--) {
       Layer* layer = _hiddenlayers[l];
       Layer* prev_layer = _hiddenlayers[l - 1];
-      // nodes
-      for (int oci = 0; oci < layer->_nodeDataOpt[n].size; oci++) {
-        int oc = layer->_nodeDataOpt[n].indices[oci];
-        bool &active = layer->_nodeDataOpt[n].active[oci];
-        float &value = layer->_nodeDataOpt[n].values[oci];
-        float &grad = layer->_nodeDataOpt[n].grads[oci];
-       
-        if (l == _numberOfLayers - 1) {
-          // ComputeExtaStatsForSoftMaxOpt
+      int OCI = layer->_nodeDataOpt[n].size;
+
+      // ComputeExtaStatsForSoftMaxOpt
+      if (l == _numberOfLayers - 1) {
+        for (int oci = 0; oci < OCI; oci++) {
+          int oc = layer->_nodeDataOpt[n].indices[oci];
+          bool &active = layer->_nodeDataOpt[n].active[oci];
+          float &value = layer->_nodeDataOpt[n].values[oci];
+          float &grad = layer->_nodeDataOpt[n].grads[oci];
+
           assert(("Input Not Active but still called !! BUG", active));
           value /= layer->getNomalizationConstant(n) + 0.0000001;
           if (find(labels, labels + labelSize, oc)!= labels + labelSize) {
@@ -424,13 +422,55 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
             grad = (-value) / _currentBatchSize;
           }
         }
-        if (l != 0) {
-          // backPropagateOpt
-          float *prevValues = prev_layer->_nodeDataOpt[n].values;
-          float *prevGrads = prev_layer->_nodeDataOpt[n].grads;
+      }
+
+      // backPropagateFirstLayerOpt
+      if (l == 0) {
+        for (int oci = 0; oci < OCI; oci++) {
+          int oc = layer->_nodeDataOpt[n].indices[oci];
+          bool &active = layer->_nodeDataOpt[n].active[oci];
+          float &value = layer->_nodeDataOpt[n].values[oci];
+          float &grad = layer->_nodeDataOpt[n].grads[oci];
+          float *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
+          float &gb = layer->_biasGrads[oc];
 
           assert(("Input Not Active but still called !! BUG", active));
+          for (int ici = 0; ici < dataLayerOpt.lengthByRecordIndex(recordIndex); ici++) {
+            int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
+            float *gw = &layer->_weightGrads[layer->_previousLayerNumOfNodes * oc];
+
+            float grad_t = grad * prevValues[ici];
+            float grad_tsq = grad_t * grad_t;
+            if (ADAM) {
+              gw[ic] += grad_t;
+            } else {
+              gw[ic] += tmplr * grad_t;
+            }
+          }
+          if (ADAM) {
+            float biasgrad_t = grad;
+            float biasgrad_tsq = biasgrad_t * biasgrad_t;
+            gb += biasgrad_t;
+          } else {
+            gb += tmplr * grad;
+          }
+          active = false;
+          grad = 0;
+          value = 0;
+        }
+      } else {
+        // backPropagateOpt
+        float *prevValues = prev_layer->_nodeDataOpt[n].values;
+        float *prevGrads = prev_layer->_nodeDataOpt[n].grads;
+
+        for (int oci = 0; oci < layer->_nodeDataOpt[n].size; oci++) {
+          int oc = layer->_nodeDataOpt[n].indices[oci];
+          bool &active = layer->_nodeDataOpt[n].active[oci];
+          float &value = layer->_nodeDataOpt[n].values[oci];
+          float &grad = layer->_nodeDataOpt[n].grads[oci];
           float &gb = layer->_biasGrads[oc];
+
+          assert(("Input Not Active but still called !! BUG", active));
           for (int ici = 0; ici < prev_layer->_nodeDataOpt[n].size; ici++) {
             int ic = prev_layer->_nodeDataOpt[n].indices[ici];
             float *w = &layer->_weights[layer->_previousLayerNumOfNodes * oc];
@@ -452,36 +492,6 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
           } else {
             gb += tmplr * grad;
           }
-
-          active = false;
-          grad = 0;
-          value = 0;
-        } else {
-          // backPropagateFirstLayerOpt
-          float *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
-
-          assert(("Input Not Active but still called !! BUG", active));
-          float &gb = layer->_biasGrads[oc];
-          for (int ici = 0; ici < dataLayerOpt.lengthByRecordIndex(recordIndex); ici++) {
-            int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
-            float *gw = &layer->_weightGrads[layer->_previousLayerNumOfNodes * oc];
-
-            float grad_t = grad * prevValues[ici];
-            float grad_tsq = grad_t * grad_t;
-            if (ADAM) {
-              gw[ic] += grad_t;
-            } else {
-              gw[ic] += tmplr * grad_t;
-            }
-          }
-          if (ADAM) {
-            float biasgrad_t = grad;
-            float biasgrad_tsq = biasgrad_t * biasgrad_t;
-            gb += biasgrad_t;
-          } else {
-            gb += tmplr * grad;
-          }
-
           active = false;
           grad = 0;
           value = 0;
