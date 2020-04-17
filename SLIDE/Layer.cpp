@@ -16,7 +16,9 @@ using namespace std;
 Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize,  int K, int L, int RangePow, float Sparsity, float* weights, float* bias, float *adamAvgMom, float *adamAvgVel) {
     _layerID = layerID;
     _noOfNodes = noOfNodes;
+#if !OPT_IA
     _Nodes = new Node[noOfNodes];
+#endif
     _type = type;
     _noOfActive = floor(_noOfNodes * Sparsity);
     _K = K;
@@ -104,9 +106,13 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
 #pragma omp parallel for
     for (size_t i = 0; i < noOfNodes; i++)
     {
+#if !OPT_IA
         _Nodes[i].Update(previousLayerNumOfNodes, i, _layerID, type, batchsize, _weights+previousLayerNumOfNodes*i,
                 _bias[i], _adamAvgMom+previousLayerNumOfNodes*i , _adamAvgVel+previousLayerNumOfNodes*i, _train_array);
         addtoHashTable(_Nodes[i]._weights, previousLayerNumOfNodes, _Nodes[i]._bias, i);
+#else
+        addtoHashTable(&_weights[previousLayerNumOfNodes * i], previousLayerNumOfNodes, _bias[i], i);
+#endif
     }
     auto t2 = std::chrono::high_resolution_clock::now();
     auto timeDiffInMiliseconds = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
@@ -166,8 +172,10 @@ void Layer::addtoHashTable(float* weights, int length, float bias, int ID)
     int * hashIndices = _hashTables->hashesToIndex(hashes);
     int * bucketIndices = _hashTables->add(hashIndices, ID+1);
 
+#if !OPT_IA
     _Nodes[ID]._indicesInTables = hashIndices;
     _Nodes[ID]._indicesInBuckets = bucketIndices;
+#endif
 
     delete [] hashes;
 
@@ -821,17 +829,17 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
 void Layer::saveWeights(string file)
 {
     if (_layerID==0) {
-        cnpy::npz_save(file, "w_layer_0", _weights, {_noOfNodes, _Nodes[0]._dim}, "w");
+        cnpy::npz_save(file, "w_layer_0", _weights, {_noOfNodes, _previousLayerNumOfNodes}, "w");
         cnpy::npz_save(file, "b_layer_0", _bias, {_noOfNodes}, "a");
-        cnpy::npz_save(file, "am_layer_0", _adamAvgMom, {_noOfNodes, _Nodes[0]._dim}, "a");
-        cnpy::npz_save(file, "av_layer_0", _adamAvgVel, {_noOfNodes, _Nodes[0]._dim}, "a");
+        cnpy::npz_save(file, "am_layer_0", _adamAvgMom, {_noOfNodes, _previousLayerNumOfNodes}, "a");
+        cnpy::npz_save(file, "av_layer_0", _adamAvgVel, {_noOfNodes, _previousLayerNumOfNodes}, "a");
         cout<<"save for layer 0"<<endl;
         cout<<_weights[0]<<" "<<_weights[1]<<endl;
     }else{
-        cnpy::npz_save(file, "w_layer_"+ to_string(_layerID), _weights, {_noOfNodes, _Nodes[0]._dim}, "a");
+        cnpy::npz_save(file, "w_layer_"+ to_string(_layerID), _weights, {_noOfNodes, _previousLayerNumOfNodes}, "a");
         cnpy::npz_save(file, "b_layer_"+ to_string(_layerID), _bias, {_noOfNodes}, "a");
-        cnpy::npz_save(file, "am_layer_"+ to_string(_layerID), _adamAvgMom, {_noOfNodes, _Nodes[0]._dim}, "a");
-        cnpy::npz_save(file, "av_layer_"+ to_string(_layerID), _adamAvgVel, {_noOfNodes, _Nodes[0]._dim}, "a");
+        cnpy::npz_save(file, "am_layer_"+ to_string(_layerID), _adamAvgMom, {_noOfNodes, _previousLayerNumOfNodes}, "a");
+        cnpy::npz_save(file, "av_layer_"+ to_string(_layerID), _adamAvgVel, {_noOfNodes, _previousLayerNumOfNodes}, "a");
         cout<<"save for layer "<<to_string(_layerID)<<endl;
         cout<<_weights[0]<<" "<<_weights[1]<<endl;
     }
