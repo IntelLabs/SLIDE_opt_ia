@@ -399,8 +399,7 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
       avg_retrieval[l] += in;
     }
 
-    //Now backpropagate.
-    // layers
+    // Now backpropagate.
     for (int l = _numberOfLayers - 1; l >= 0; l--) {
       Layer* layer = _hiddenlayers[l];
       Layer* prev_layer = _hiddenlayers[l - 1];
@@ -506,16 +505,16 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
   bool tmpRehash;
   bool tmpRebuild;
 
-  for (int l=0; l<_numberOfLayers ;l++) {
-    if(rehash & _Sparsity[l]<1){
-      tmpRehash=true;
-    }else{
-      tmpRehash=false;
+  for (int l = 0; l < _numberOfLayers; l++) {
+    if (rehash && _Sparsity[l] < 1){
+      tmpRehash = true;
+    } else {
+      tmpRehash = false;
     }
-    if(rebuild & _Sparsity[l]<1){
-      tmpRebuild=true;
-    }else{
-      tmpRebuild=false;
+    if (rebuild && _Sparsity[l] < 1){
+      tmpRebuild = true;
+    } else {
+      tmpRebuild = false;
     }
     if (tmpRehash) {
       _hiddenlayers[l]->_hashTables->clear();
