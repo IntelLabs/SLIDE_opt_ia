@@ -521,33 +521,33 @@ int Layer::queryActiveNodeandComputeActivations(int** activenodesperlayer, float
 
 
 int Layer::queryActiveNodeandComputeActivationsOpt(
-    int* indices, float* values, int size,
+    int* in_indices, float* in_values, int ICI,
     int layerID, int inputID, int* label, int labelsize,
     float Sparsity, int iter) {
 
   //LSH QueryLogic
 
   //Beidi. Query out all the candidate nodes
-  int len;
+  int OCI;
   int in = 0;
 
   if (Sparsity == 1.0){
-    len = _noOfNodes;
-    _nodeDataOpt[inputID].size = len;
-    for (int i = 0; i < len; i++) {
+    OCI = _noOfNodes;
+    _nodeDataOpt[inputID].size = OCI;
+    for (int i = 0; i < OCI; i++) {
       _nodeDataOpt[inputID].indices[i] = i;
     }
   } else {
     if (Mode==1) {
       int *hashes;
       if (HashFunction == 1) {
-        hashes = _wtaHasher->getHash(values);
+        hashes = _wtaHasher->getHash(in_values);
       } else if (HashFunction == 2) {
-        hashes = _dwtaHasher->getHash(indices, values, size);
+        hashes = _dwtaHasher->getHash(in_indices, in_values, ICI);
       } else if (HashFunction == 3) {
-        hashes = _MinHasher->getHashEasy(_binids, values, size, TOPK);
+        hashes = _MinHasher->getHashEasy(_binids, in_values, ICI, TOPK);
       } else if (HashFunction == 4) {
-        hashes = _srp->getHashSparse(indices, values, size);
+        hashes = _srp->getHashSparse(in_indices, in_values, ICI);
       }
       int *hashIndices = _hashTables->hashesToIndex(hashes);
       int **actives = _hashTables->retrieveRaw(hashIndices);
@@ -590,14 +590,14 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
         }
       }
 
-      len = vect.size();
-      _nodeDataOpt[inputID].size = len;
+      OCI = vect.size();
+      _nodeDataOpt[inputID].size = OCI;
 
-      for (int i = 0; i < len; i++) {
+      for (int i = 0; i < OCI; i++) {
         _nodeDataOpt[inputID].indices[i] = vect[i];
       }
       auto t33 = std::chrono::high_resolution_clock::now();
-      in = len;
+      in = OCI;
 
       delete[] hashes;
       delete[] hashIndices;
@@ -607,13 +607,13 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
     if (Mode==4) {
       int *hashes;
       if (HashFunction == 1) {
-        hashes = _wtaHasher->getHash(values);
+        hashes = _wtaHasher->getHash(in_values);
       } else if (HashFunction == 2) {
-        hashes = _dwtaHasher->getHash(indices, values, size);
+        hashes = _dwtaHasher->getHash(in_indices, in_values, ICI);
       } else if (HashFunction == 3) {
-        hashes = _MinHasher->getHashEasy(_binids, values, size, TOPK);
+        hashes = _MinHasher->getHashEasy(_binids, in_values, ICI, TOPK);
       } else if (HashFunction == 4) {
-        hashes = _srp->getHashSparse(indices, values, size);
+        hashes = _srp->getHashSparse(in_indices, in_values, ICI);
       }
       int *hashIndices = _hashTables->hashesToIndex(hashes);
       int **actives = _hashTables->retrieveRaw(hashIndices);
@@ -669,8 +669,8 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
         }
       }
 
-      len = counts.size();
-      _nodeDataOpt[inputID].size = len;
+      OCI = counts.size();
+      _nodeDataOpt[inputID].size = OCI;
 
       // copy map into new array
       int i=0;
@@ -685,8 +685,8 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
 
     }
     else if (Mode == 2 & _type== NodeType::Softmax) {
-      len = floor(_noOfNodes * Sparsity);
-      _nodeDataOpt[inputID].size = len;
+      OCI = floor(_noOfNodes * Sparsity);
+      _nodeDataOpt[inputID].size = OCI;
 
       auto t1 = std::chrono::high_resolution_clock::now();
       bitset <MAPLEN> bs;
@@ -701,7 +701,7 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
         }
       }
 
-      while(tmpsize<len){
+      while(tmpsize < OCI){
         int v = rand() % _noOfNodes;
         if(bs[v]==0) {
           _nodeDataOpt[inputID].indices[tmpsize] = v;
@@ -719,14 +719,14 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
 
     else if (Mode==3 & _type== NodeType::Softmax){
 
-      len = floor(_noOfNodes * Sparsity);
-      _nodeDataOpt[inputID].size = len;
+      OCI = floor(_noOfNodes * Sparsity);
+      _nodeDataOpt[inputID].size = OCI;
       vector<pair<float, int> > sortW;
       int what = 0;
 
       for (size_t s = 0; s < _noOfNodes; s++) {
-        float tmp = innerproduct(indices, values, size, _Nodes[s]._weights);
-        tmp += _Nodes[s]._bias;
+        float tmp = innerproduct(in_indices, in_values, ICI, &_weights[_previousLayerNumOfNodes * s]);
+        tmp += _bias[s];
         if (find(label, label + labelsize, s) != label + labelsize) {
           sortW.push_back(make_pair(-1000000000, s));
           what++;
@@ -738,7 +738,7 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
 
       std::sort(begin(sortW), end(sortW));
 
-      for (int i = 0; i < len; i++) {
+      for (int i = 0; i < OCI; i++) {
         _nodeDataOpt[inputID].indices[i] = sortW[i].second;
         if (find (label, label+labelsize, sortW[i].second)!= label+labelsize){
           in=1;
@@ -753,22 +753,22 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
     _normalizationConstants[inputID] = 0;
 
   // find activation for all ACTIVE nodes in layer
-  for (int oc = 0; oc < len; oc++)
+  for (int oci = 0; oci < OCI; oci++)
   {
-    bool &active = _nodeDataOpt[inputID].active[oc];
-    float &grad = _nodeDataOpt[inputID].grads[oc];
-    float &value = _nodeDataOpt[inputID].values[oc];
-    int oc_index = _nodeDataOpt[inputID].indices[oc];
-    float *w = &_weights[oc_index * _previousLayerNumOfNodes];
+    bool &active = _nodeDataOpt[inputID].active[oci];
+    float &grad = _nodeDataOpt[inputID].grads[oci];
+    float &value = _nodeDataOpt[inputID].values[oci];
+    int oc = _nodeDataOpt[inputID].indices[oci];
+    float *w = &_weights[oc * _previousLayerNumOfNodes];
 
     if (!active) active = true; // initialize active to false;
 #define PF_STR 32
-    float res = _bias[oc_index];
-    for (int ic = 0; ic < size; ic++)
+    float res = _bias[oc];
+    for (int ici = 0; ici < ICI; ici++)
     {
-      res += w[indices[ic]] * values[ic];
-      if (ic + PF_STR < size)
-        _mm_prefetch(&w[indices[ic + PF_STR]], _MM_HINT_T0);
+      res += w[in_indices[ici]] * in_values[ici];
+      if (ici + PF_STR < ICI)
+        _mm_prefetch(&w[in_indices[ici + PF_STR]], _MM_HINT_T0);
     }
 
     switch (_type)
@@ -787,16 +787,16 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
     }
     value = res;
 
-    if(_type == NodeType::Softmax && _nodeDataOpt[inputID].values[oc] > maxValue){
-      maxValue = _nodeDataOpt[inputID].values[oc];
+    if(_type == NodeType::Softmax && _nodeDataOpt[inputID].values[oci] > maxValue){
+      maxValue = _nodeDataOpt[inputID].values[oci];
     }
   }
 
   if(_type == NodeType::Softmax) {
 #if OPT_VEC512
     constexpr int V = 16;
-    int O = (len + V - 1) / V;
-    int Vr = len % V ? len % V : V;
+    int O = (OCI + V - 1) / V;
+    int Vr = OCI % V ? OCI % V : V;
     __m512 vec_max = _mm512_set1_ps(maxValue);
     __m512 vec_sum = _mm512_setzero_ps();
     __m512 vec_zero = _mm512_setzero_ps();
@@ -813,10 +813,9 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
     _normalizationConstants[inputID] = sum;
 #else
 
-    for (int i = 0; i < len; i++) {
-      float realActivation = exp(_nodeDataOpt[inputID].values[i] - maxValue);
-      _nodeDataOpt[inputID].values[i] = realActivation;
-      _Nodes[_nodeDataOpt[inputID].indices[i]].SetlastActivation(inputID, realActivation);
+    for (int oci = 0; oci < OCI; oci++) {
+      float realActivation = exp(_nodeDataOpt[inputID].values[oci] - maxValue);
+      _nodeDataOpt[inputID].values[oci] = realActivation;
       _normalizationConstants[inputID] += realActivation;
     }
 #endif
