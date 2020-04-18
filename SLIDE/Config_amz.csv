@@ -24,3 +24,5 @@ weight=../savedWeight.npz
 savedweight=../savedWeight.npz
 
 logFile=../dataset/log.txt
+
+Bfloat16Opt=True

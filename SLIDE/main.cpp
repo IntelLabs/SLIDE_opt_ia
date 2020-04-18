@@ -5,6 +5,7 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <locale>
 #include "Network.h"
 #include <algorithm>
 #include <map>
@@ -36,6 +37,7 @@ int Epoch = 5;
 int Stepsize = 20;
 int *sizesOfLayers;
 int numLayer = 3;
+bool Bfloat16Opt = false;
 string trainData = "";
 string testData = "";
 string Weights = "";
@@ -218,6 +220,14 @@ void parseconfig(string filename)
         else if (trim(first) == "savedweight")
         {
             savedWeights = trim(second).c_str();
+        }
+        else if (trim(first) == "Bfloat16Opt")
+        {
+            string str = trim(second);
+            std::transform(str.begin(), str.end(), str.begin(),
+                           [](unsigned char c){ return std::tolower(c); });
+            Bfloat16Opt =
+              (str == "true" || str == "yes" || str == "1") ? true : false;
         }
         else
         {
@@ -504,12 +514,7 @@ void ReadDataSVMOpt(DataLayerOpt<T> &testData, DataLayerOpt<T> &trainData,
 }
 
 template <class T>
-int _main(int argc, char* argv[]) {
-    //***********************************
-    // Parse Config File
-    //***********************************
-    parseconfig(argv[1]);
-
+int Execute() {
     //***********************************
     // Initialize Network
     //***********************************
@@ -585,6 +590,14 @@ int _main(int argc, char* argv[]) {
 
 
 int main(int argc, char* argv[]) {
-  return _main<float>(argc, argv);
+  //***********************************
+  // Parse Config File
+  //***********************************
+  parseconfig(argv[1]);
+
+  if (Bfloat16Opt)
+    return Execute<bfloat16>();
+  else
+    return Execute<float>();
 }
 
