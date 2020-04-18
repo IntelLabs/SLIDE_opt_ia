@@ -9,11 +9,13 @@
 #include <fstream>
 #include <omp.h>
 #include <x86intrin.h>
+#include "Bfloat16.h"
 
 using namespace std;
 
 
-Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize,  int K, int L, int RangePow, float Sparsity, float* weights, float* bias, float *adamAvgMom, float *adamAvgVel) {
+template <class T>
+Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize,  int K, int L, int RangePow, float Sparsity, T* weights, T* bias, float *adamAvgMom, float *adamAvgVel) {
     _layerID = layerID;
     _noOfNodes = noOfNodes;
 #if !OPT_IA
@@ -39,16 +41,16 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
     _hashTables = new LSH(_K, _L, RangePow);
 
     if (HashFunction == 1) {
-        _wtaHasher = new WtaHash(_K * _L, previousLayerNumOfNodes);
+        _wtaHasher = new WtaHash<T>(_K * _L, previousLayerNumOfNodes);
     } else if (HashFunction == 2) {
         _binids = new int[previousLayerNumOfNodes];
-        _dwtaHasher = new DensifiedWtaHash(_K * _L, previousLayerNumOfNodes);
+        _dwtaHasher = new DensifiedWtaHash<T>(_K * _L, previousLayerNumOfNodes);
     } else if (HashFunction == 3) {
         _binids = new int[previousLayerNumOfNodes];
-        _MinHasher = new DensifiedMinhash(_K * _L, previousLayerNumOfNodes);
+        _MinHasher = new DensifiedMinhash<T>(_K * _L, previousLayerNumOfNodes);
         _MinHasher->getMap(previousLayerNumOfNodes, _binids);
     } else if (HashFunction == 4) {
-        _srp = new SparseRandomProjection(previousLayerNumOfNodes, _K * _L, Ratio);
+        _srp = new SparseRandomProjection<T>(previousLayerNumOfNodes, _K * _L, Ratio);
     }
 
 #if OPT_IA
@@ -56,8 +58,8 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
     for (int i = 0; i < _batchsize; i++) {
       _nodeDataOpt[i].size = _noOfNodes; // assume dense
       _nodeDataOpt[i].indices = new int[_noOfNodes];
-      _nodeDataOpt[i].values = new float[_noOfNodes];
-      _nodeDataOpt[i].grads = new float[_noOfNodes];
+      _nodeDataOpt[i].values = new T[_noOfNodes];
+      _nodeDataOpt[i].grads = new T[_noOfNodes];
       _nodeDataOpt[i].active = new bool[_noOfNodes];
     }
 #endif
@@ -72,11 +74,11 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
         }
 
     }else{
-        _weights = new float[_noOfNodes * previousLayerNumOfNodes]();
-        _bias = new float[_noOfNodes];
+        _weights = new T[_noOfNodes * previousLayerNumOfNodes]();
+        _bias = new T[_noOfNodes];
 #if OPT_IA
-        _weightGrads = new float[_noOfNodes * previousLayerNumOfNodes]();
-        _biasGrads = new float[_noOfNodes];
+        _weightGrads = new T[_noOfNodes * previousLayerNumOfNodes]();
+        _biasGrads = new T[_noOfNodes];
 #endif
         random_device rd;
         default_random_engine dre(rd());
@@ -100,7 +102,7 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
 
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    _train_array = new train[noOfNodes*batchsize];
+    _train_array = new train<T>[noOfNodes*batchsize];
 
     // create nodes for this layer
 #pragma omp parallel for
@@ -125,37 +127,40 @@ Layer::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeTyp
 }
 
 
-void Layer::updateTable()
+template <class T>
+void Layer<T>::updateTable()
 {
 
     if (HashFunction == 1) {
          delete _wtaHasher;
-        _wtaHasher = new WtaHash(_K * _L, _previousLayerNumOfNodes);
+        _wtaHasher = new WtaHash<T>(_K * _L, _previousLayerNumOfNodes);
     } else if (HashFunction == 2) {
          delete _dwtaHasher, _binids;
         _binids = new int[_previousLayerNumOfNodes];
-        _dwtaHasher = new DensifiedWtaHash(_K * _L, _previousLayerNumOfNodes);
+        _dwtaHasher = new DensifiedWtaHash<T>(_K * _L, _previousLayerNumOfNodes);
     } else if (HashFunction == 3) {
 
          delete _MinHasher,  _binids;
         _binids = new int[_previousLayerNumOfNodes];
-        _MinHasher = new DensifiedMinhash(_K * _L, _previousLayerNumOfNodes);
+        _MinHasher = new DensifiedMinhash<T>(_K * _L, _previousLayerNumOfNodes);
         _MinHasher->getMap(_previousLayerNumOfNodes, _binids);
     } else if (HashFunction == 4) {
 
-        _srp = new SparseRandomProjection(_previousLayerNumOfNodes, _K * _L, Ratio);
+        _srp = new SparseRandomProjection<T>(_previousLayerNumOfNodes, _K * _L, Ratio);
 
     }
 }
 
 
-void Layer::updateRandomNodes()
+template <class T>
+void Layer<T>::updateRandomNodes()
 {
     std::random_shuffle(_randNode, _randNode + _noOfNodes);
 }
 
 
-void Layer::addtoHashTable(float* weights, int length, float bias, int ID)
+template <class T>
+void Layer<T>::addtoHashTable(T* weights, int length, T bias, int ID)
 {
     //LSH logic
     int *hashes;
@@ -182,31 +187,36 @@ void Layer::addtoHashTable(float* weights, int length, float bias, int ID)
 }
 
 
-Node* Layer::getNodebyID(size_t nodeID)
+template <class T>
+Node<T>* Layer<T>::getNodebyID(size_t nodeID)
 {
     assert(("nodeID less than _noOfNodes" , nodeID < _noOfNodes));
     return &_Nodes[nodeID];
 }
 
 
-Node* Layer::getAllNodes()
+template <class T>
+Node<T>* Layer<T>::getAllNodes()
 {
     return _Nodes;
 }
 
-int Layer::getNodeCount()
+template <class T>
+int Layer<T>::getNodeCount()
 {
     return _noOfNodes;
 }
 
-float Layer::getNomalizationConstant(int inputID)
+template <class T>
+float Layer<T>::getNomalizationConstant(int inputID)
 {
     assert(("Error Call to Normalization Constant for non - softmax layer", _type == NodeType::Softmax));
     return _normalizationConstants[inputID];
 }
 
 
-float innerproduct(int* index1, float* value1, int len1, float* value2){
+template <class T>
+float innerproduct(int* index1, T* value1, int len1, T* value2){
     float total = 0;
     for (int i=0; i<len1; i++){
         total+=value1[i]*value2[index1[i]];
@@ -214,7 +224,7 @@ float innerproduct(int* index1, float* value1, int len1, float* value2){
     return total;
 }
 
-
+template <class T>
 float collision(int* hashes, int* table_hashes, int k, int l){
     int cp = 0;
     for (int i=0; i<l; i=i+k){
@@ -231,8 +241,8 @@ float collision(int* hashes, int* table_hashes, int k, int l){
     return cp*1.0/(l/k);
 }
 
-
-int Layer::queryActiveNodeandComputeActivations(int** activenodesperlayer, float** activeValuesperlayer, int* lengths, int layerIndex, int inputID, int* label, int labelsize, float Sparsity, int iter)
+template <class T>
+int Layer<T>::queryActiveNodeandComputeActivations(int** activenodesperlayer, T** activeValuesperlayer, int* lengths, int layerIndex, int inputID, int* label, int labelsize, float Sparsity, int iter)
 {
     //LSH QueryLogic
 
@@ -468,8 +478,8 @@ int Layer::queryActiveNodeandComputeActivations(int** activenodesperlayer, float
     }
 
     //***********************************
-    activeValuesperlayer[layerIndex + 1] = new float[len]; //assuming its not initialized else memory leak;
-    float maxValue = 0;
+    activeValuesperlayer[layerIndex + 1] = new T[len]; //assuming its not initialized else memory leak;
+    T maxValue = 0;
     if (_type == NodeType::Softmax)
         _normalizationConstants[inputID] = 0;
 
@@ -483,7 +493,7 @@ int Layer::queryActiveNodeandComputeActivations(int** activenodesperlayer, float
     }
 
     if(_type == NodeType::Softmax) {
-#if OPT_VEC512
+      if (std::is_same<T, float>::value) {
         constexpr int V = 16;
         int O = (len + V - 1) / V;
         int Vr = len % V ? len % V : V;
@@ -505,23 +515,23 @@ int Layer::queryActiveNodeandComputeActivations(int** activenodesperlayer, float
         }
         float sum = _mm512_reduce_add_ps(vec_sum);
         _normalizationConstants[inputID] = sum;
-#else
-
+      } else {
         for (int i = 0; i < len; i++) {
-            float realActivation = exp(activeValuesperlayer[layerIndex + 1][i] - maxValue);
+            T realActivation = exp(activeValuesperlayer[layerIndex + 1][i] - maxValue);
             activeValuesperlayer[layerIndex + 1][i] = realActivation;
             _Nodes[activenodesperlayer[layerIndex + 1][i]].SetlastActivation(inputID, realActivation);
             _normalizationConstants[inputID] += realActivation;
         }
-#endif
+      }
     }
 
     return in;
 }
 
 
-int Layer::queryActiveNodeandComputeActivationsOpt(
-    int* in_indices, float* in_values, int ICI,
+template <class T>
+int Layer<T>::queryActiveNodeandComputeActivationsOpt(
+    int* in_indices, T* in_values, int ICI,
     int layerID, int inputID, int* label, int labelsize,
     float Sparsity, int iter) {
 
@@ -753,22 +763,21 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
     _normalizationConstants[inputID] = 0;
 
   // find activation for all ACTIVE nodes in layer
-  for (int oci = 0; oci < OCI; oci++)
-  {
+  for (int oci = 0; oci < OCI; oci++) {
     bool &active = _nodeDataOpt[inputID].active[oci];
-    float &grad = _nodeDataOpt[inputID].grads[oci];
-    float &value = _nodeDataOpt[inputID].values[oci];
+    T &grad = _nodeDataOpt[inputID].grads[oci];
+    T &value = _nodeDataOpt[inputID].values[oci];
     int oc = _nodeDataOpt[inputID].indices[oci];
-    float *w = &_weights[oc * _previousLayerNumOfNodes];
+    T *w = &_weights[oc * _previousLayerNumOfNodes];
 
     if (!active) active = true; // initialize active to false;
 #define PF_STR 32
     float res = _bias[oc];
     for (int ici = 0; ici < ICI; ici++)
     {
-      res += w[in_indices[ici]] * in_values[ici];
-      if (ici + PF_STR < ICI)
-        _mm_prefetch(&w[in_indices[ici + PF_STR]], _MM_HINT_T0);
+      res += float(w[in_indices[ici]]) * float(in_values[ici]);
+      //if (ici + PF_STR < ICI)
+      //  _mm_prefetch(&w[in_indices[ici + PF_STR]], _MM_HINT_T0);
     }
 
     switch (_type)
@@ -787,45 +796,46 @@ int Layer::queryActiveNodeandComputeActivationsOpt(
     }
     value = res;
 
-    if(_type == NodeType::Softmax && _nodeDataOpt[inputID].values[oci] > maxValue){
-      maxValue = _nodeDataOpt[inputID].values[oci];
+    if(_type == NodeType::Softmax && res > maxValue){
+      maxValue = res;
     }
   }
 
   if(_type == NodeType::Softmax) {
-#if OPT_VEC512
-    constexpr int V = 16;
-    int O = (OCI + V - 1) / V;
-    int Vr = OCI % V ? OCI % V : V;
-    __m512 vec_max = _mm512_set1_ps(maxValue);
-    __m512 vec_sum = _mm512_setzero_ps();
-    __m512 vec_zero = _mm512_setzero_ps();
-    for (int o = 0; o < O; o++) {
-      int Vx = o == O - 1 ? Vr : V;
-      __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+    if (std::is_same<T, float>::value) {
+      constexpr int V = 16;
+      int O = (OCI + V - 1) / V;
+      int Vr = OCI % V ? OCI % V : V;
+      __m512 vec_max = _mm512_set1_ps(maxValue);
+      __m512 vec_sum = _mm512_setzero_ps();
+      __m512 vec_zero = _mm512_setzero_ps();
+      for (int o = 0; o < O; o++) {
+        int Vx = o == O - 1 ? Vr : V;
+        __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
 
-      __m512 vec_val = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o * V]);
-      vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
-      vec_sum += vec_val;
-      _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o * V], k, vec_val);
+        __m512 vec_val = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o * V]);
+        vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
+        vec_sum += vec_val;
+        _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o * V], k, vec_val);
+      }
+      float sum = _mm512_reduce_add_ps(vec_sum);
+      _normalizationConstants[inputID] = sum;
+    } else {
+      for (int oci = 0; oci < OCI; oci++) {
+        float v = _nodeDataOpt[inputID].values[oci];
+        float realActivation = exp(v - maxValue);
+        _nodeDataOpt[inputID].values[oci] = realActivation;
+        _normalizationConstants[inputID] += realActivation;
+      }
     }
-    float sum = _mm512_reduce_add_ps(vec_sum);
-    _normalizationConstants[inputID] = sum;
-#else
-
-    for (int oci = 0; oci < OCI; oci++) {
-      float realActivation = exp(_nodeDataOpt[inputID].values[oci] - maxValue);
-      _nodeDataOpt[inputID].values[oci] = realActivation;
-      _normalizationConstants[inputID] += realActivation;
-    }
-#endif
   }
 
   return in;
 }
 
 
-void Layer::saveWeights(string file)
+template <class T>
+void Layer<T>::saveWeights(string file)
 {
     if (_layerID==0) {
         cnpy::npz_save(file, "w_layer_0", _weights, {_noOfNodes, _previousLayerNumOfNodes}, "w");
@@ -833,19 +843,20 @@ void Layer::saveWeights(string file)
         cnpy::npz_save(file, "am_layer_0", _adamAvgMom, {_noOfNodes, _previousLayerNumOfNodes}, "a");
         cnpy::npz_save(file, "av_layer_0", _adamAvgVel, {_noOfNodes, _previousLayerNumOfNodes}, "a");
         cout<<"save for layer 0"<<endl;
-        cout<<_weights[0]<<" "<<_weights[1]<<endl;
+        cout<< float(_weights[0]) <<" "<< float(_weights[1]) <<endl;
     }else{
         cnpy::npz_save(file, "w_layer_"+ to_string(_layerID), _weights, {_noOfNodes, _previousLayerNumOfNodes}, "a");
         cnpy::npz_save(file, "b_layer_"+ to_string(_layerID), _bias, {_noOfNodes}, "a");
         cnpy::npz_save(file, "am_layer_"+ to_string(_layerID), _adamAvgMom, {_noOfNodes, _previousLayerNumOfNodes}, "a");
         cnpy::npz_save(file, "av_layer_"+ to_string(_layerID), _adamAvgVel, {_noOfNodes, _previousLayerNumOfNodes}, "a");
         cout<<"save for layer "<<to_string(_layerID)<<endl;
-        cout<<_weights[0]<<" "<<_weights[1]<<endl;
+        cout<< float(_weights[0]) <<" "<< float(_weights[1]) <<endl;
     }
 }
 
 
-Layer::~Layer()
+template <class T>
+Layer<T>::~Layer()
 {
 
     for (size_t i = 0; i < _noOfNodes; i++)
@@ -883,3 +894,6 @@ Layer::~Layer()
     delete [] _randNode;
     delete[] _train_array;
 }
+
+template class Layer<float>;
+template class Layer<bfloat16>;

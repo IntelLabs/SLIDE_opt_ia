@@ -44,9 +44,6 @@ string logFile = "";
 using namespace std;
 int globalTime = 0;
 
-DataLayerOpt testDataOpt;
-DataLayerOpt trainDataOpt;
-
 #define ALL(c) c.begin(), c.end()
 #define FOR(i,c) for(typeof(c.begin())i=c.begin();i!=c.end();++i)
 #define REP(i,n) for(int i=0;i<n;++i)
@@ -230,7 +227,8 @@ void parseconfig(string filename)
     }
 }
 
-void EvalDataSVM(int numBatchesTest,  Network* _mynet, int iter){
+template <class T>
+void EvalDataSVM(int numBatchesTest,  Network<T>* _mynet, int iter){
     int totCorrect = 0;
     int debugnumber = 0;
     std::ifstream testfile(testData);
@@ -241,7 +239,7 @@ void EvalDataSVM(int numBatchesTest,  Network* _mynet, int iter){
     ofstream outputFile(logFile,  std::ios_base::app);
     for (int i = 0; i < numBatchesTest; i++) {
         int **records = new int *[Batchsize];
-        float **values = new float *[Batchsize];
+        T **values = new T *[Batchsize];
         int *sizes = new int[Batchsize];
         int **labels = new int *[Batchsize];
         int *labelsize = new int[Batchsize];
@@ -277,7 +275,7 @@ void EvalDataSVM(int numBatchesTest,  Network* _mynet, int iter){
 
             nonzeros += list.size();
             records[count] = new int[list.size()];
-            values[count] = new float[list.size()];
+            values[count] = new T[list.size()];
             labels[count] = new int[label.size()];
             sizes[count] = list.size();
             labelsize[count] = label.size();
@@ -333,12 +331,14 @@ void EvalDataSVM(int numBatchesTest,  Network* _mynet, int iter){
 
 }
 
-void EvalDataSVMOpt(int numBatchesTest,  Network* _mynet, int iter){
+template <class T>
+void EvalDataSVMOpt(DataLayerOpt<T> &testData, int numBatchesTest,
+                    Network<T>* _mynet, int iter){
   int totCorrect = 0;
   ofstream outputFile(logFile,  std::ios_base::app);
 
   for (int i = 0; i < numBatchesTest; i++) {
-    auto correctPredict = _mynet->predictClassOpt(testDataOpt, i);
+    auto correctPredict = _mynet->predictClassOpt(testData, i);
     totCorrect += correctPredict;
     std::cout
       << " iter " << i << ": "
@@ -352,7 +352,8 @@ void EvalDataSVMOpt(int numBatchesTest,  Network* _mynet, int iter){
     << totCorrect * 1.0 / (numBatchesTest*Batchsize) << endl;
 }
 
-void ReadDataSVM(size_t numBatches,  Network* _mynet, int epoch){
+template <class T>
+void ReadDataSVM(size_t numBatches,  Network<T>* _mynet, int epoch){
     std::ifstream file(trainData);
     std::string str;
     //skipe header
@@ -362,7 +363,7 @@ void ReadDataSVM(size_t numBatches,  Network* _mynet, int epoch){
             EvalDataSVM(20, _mynet, epoch*numBatches+i);
         }
         int **records = new int *[Batchsize];
-        float **values = new float *[Batchsize];
+        T **values = new T *[Batchsize];
         int *sizes = new int[Batchsize];
         int **labels = new int *[Batchsize];
         int *labelsize = new int[Batchsize];
@@ -397,7 +398,7 @@ void ReadDataSVM(size_t numBatches,  Network* _mynet, int epoch){
 
             nonzeros += list.size();
             records[count] = new int[list.size()];
-            values[count] = new float[list.size()];
+            values[count] = new T[list.size()];
             labels[count] = new int[label.size()];
             sizes[count] = list.size();
             labelsize[count] = label.size();
@@ -465,10 +466,12 @@ void ReadDataSVM(size_t numBatches,  Network* _mynet, int epoch){
 
 }
 
-void ReadDataSVMOpt(size_t numBatches,  Network* _mynet, int epoch){
+template <class T>
+void ReadDataSVMOpt(DataLayerOpt<T> &testData, DataLayerOpt<T> &trainData,
+                    size_t numBatches,  Network<T>* _mynet, int epoch){
   for (size_t i = 0; i < numBatches; i++) {
     if ((i + epoch * numBatches) % Stepsize == 0) {
-      EvalDataSVMOpt(20, _mynet, epoch*numBatches+i);
+      EvalDataSVMOpt<T>(testData, 20, _mynet, epoch*numBatches+i);
     }
 
     bool rehash = false;
@@ -490,7 +493,7 @@ void ReadDataSVMOpt(size_t numBatches,  Network* _mynet, int epoch){
     auto t1 = std::chrono::high_resolution_clock::now();
 
     // logloss
-    _mynet->ProcessInputOpt(trainDataOpt, i,
+    _mynet->ProcessInputOpt(trainData, i,
                             epoch * numBatches + i, rehash, rebuild);
 
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -500,9 +503,8 @@ void ReadDataSVMOpt(size_t numBatches,  Network* _mynet, int epoch){
   }
 }
 
-
-int main(int argc, char* argv[])
-{
+template <class T>
+int _main(int argc, char* argv[]) {
     //***********************************
     // Parse Config File
     //***********************************
@@ -525,17 +527,20 @@ int main(int argc, char* argv[])
         arr = cnpy::npz_load(Weights);
     }
     auto t1 = std::chrono::high_resolution_clock::now();
-    Network *_mynet = new Network(sizesOfLayers, layersTypes, numLayer, Batchsize, Lr, InputDim, K, L, RangePow, Sparsity, arr);
+    Network<T> *_mynet = new Network<T>(sizesOfLayers, layersTypes, numLayer, Batchsize, Lr, InputDim, K, L, RangePow, Sparsity, arr);
     auto t2 = std::chrono::high_resolution_clock::now();
     float timeDiffInMiliseconds = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
     std::cout << "Network Initialization takes " << timeDiffInMiliseconds/1000 << " milliseconds" << std::endl;
 
+#if OPT_IA
     t1 = std::chrono::high_resolution_clock::now();
+    DataLayerOpt<T> testDataOpt, trainDataOpt;
     testDataOpt.loadData(testData);
     trainDataOpt.loadData(trainData);
     t2 = std::chrono::high_resolution_clock::now();
     timeDiffInMiliseconds = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
     std::cout << "Data loading takes " << timeDiffInMiliseconds/1000 << " milliseconds" << std::endl;
+#endif
 
     //***********************************
     // Start Training
@@ -546,7 +551,7 @@ int main(int argc, char* argv[])
         outputFile<<"Epoch "<<e<<endl;
         // train
 #if OPT_IA
-        ReadDataSVMOpt(numBatches, _mynet, e);
+        ReadDataSVMOpt(testDataOpt, trainDataOpt, numBatches, _mynet, e);
 #else
         ReadDataSVM(numBatches, _mynet, e);
 #endif
@@ -554,13 +559,13 @@ int main(int argc, char* argv[])
         // test
         if(e==Epoch-1) {
 #if OPT_IA
-            EvalDataSVMOpt(numBatchesTest, _mynet, (e+1)*numBatches);
+            EvalDataSVMOpt(testDataOpt, numBatchesTest, _mynet, (e+1)*numBatches);
 #else
             EvalDataSVM(numBatchesTest, _mynet, (e+1)*numBatches);
 #endif
         }else{
 #if OPT_IA
-            EvalDataSVMOpt(50, _mynet, (e+1)*numBatches);
+            EvalDataSVMOpt(testDataOpt, 50, _mynet, (e+1)*numBatches);
 #else
             EvalDataSVM(50, _mynet, (e+1)*numBatches);
 #endif
@@ -577,3 +582,9 @@ int main(int argc, char* argv[])
     return 0;
 
 }
+
+
+int main(int argc, char* argv[]) {
+  return _main<float>(argc, argv);
+}
+

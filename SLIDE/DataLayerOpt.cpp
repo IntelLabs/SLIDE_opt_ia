@@ -4,7 +4,8 @@
 #include <assert.h>
 #include "DataLayerOpt.h"
 
-void DataLayerOpt::loadData(const std::string &srcFile) {
+template <class T>
+void DataLayerOpt<T>::loadData(const std::string &srcFile) {
   std::ifstream ifile(srcFile);
   std::string line;
 
@@ -64,7 +65,7 @@ void DataLayerOpt::loadData(const std::string &srcFile) {
              numPointIndex, lengths_[numPointIndex], totalFeatureLength,
              labelLengths_[numPointIndex], totalLabelLength);
       for (int i = 0; i < lengthByRecordIndex(numPointIndex); i++) {
-        float *values = valuesByRecordIndex(numPointIndex);
+        T *values = valuesByRecordIndex(numPointIndex);
         int *indices = indicesByRecordIndex(numPointIndex);
         printf("point:%d=%f\n", indices[i], values[i]);
       }
@@ -82,3 +83,6 @@ void DataLayerOpt::loadData(const std::string &srcFile) {
 
   ifile.close();
 }
+
+template struct DataLayerOpt<float>;
+template struct DataLayerOpt<bfloat16>;

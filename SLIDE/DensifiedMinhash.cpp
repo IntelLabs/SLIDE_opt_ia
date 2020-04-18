@@ -6,17 +6,20 @@
 #include <climits>
 #include <algorithm>
 #include <queue>
+#include "Bfloat16.h"
 using namespace std;
 
-typedef pair<int, float> PAIR;
+template <class T> using PAIR = pair<int, T>;
 
+template <class T>
 struct cmp {
-    bool operator()(const PAIR &a, const PAIR &b) {
+    bool operator()(const PAIR<T> &a, const PAIR<T> &b) {
         return a.second > b.second; //lower is better
     };
 };
 
-DensifiedMinhash::DensifiedMinhash(int numHashes, int noOfBitsToHash)
+template <class T>
+DensifiedMinhash<T>::DensifiedMinhash(int numHashes, int noOfBitsToHash)
 {
 
     _numhashes = numHashes;
@@ -41,8 +44,8 @@ DensifiedMinhash::DensifiedMinhash(int numHashes, int noOfBitsToHash)
 
 }
 
-
-void DensifiedMinhash::getMap(int n, int* binids)
+template <class T>
+void DensifiedMinhash<T>::getMap(int n, int* binids)
 {
     int range = 1 << _rangePow;
     // binsize is the number of times the range is larger than the total number of hashes we need.
@@ -62,13 +65,14 @@ void DensifiedMinhash::getMap(int n, int* binids)
 }
 
 
-int * DensifiedMinhash::getHashEasy(int* binids, float* data, int dataLen, int topK)
+template <class T>
+int * DensifiedMinhash<T>::getHashEasy(int* binids, T* data, int dataLen, int topK)
 {
 
     // binsize is the number of times the range is larger than the total number of hashes we need.
 // read the data and add it to priority queue O(dlogk approx 7d) with index as key and values as priority value, get topk index O(1) and apply minhash on retuned index.
 
-    priority_queue<PAIR, vector<PAIR>, cmp> pq;
+    priority_queue<PAIR<T>, vector<PAIR<T> >, cmp<T>> pq;
 
     for (int i = 0; i < topK; i++)
     {
@@ -95,7 +99,7 @@ int * DensifiedMinhash::getHashEasy(int* binids, float* data, int dataLen, int t
 
     for (int i = 0; i < topK; i++)
     {
-        PAIR pair = pq.top();
+        PAIR<T> pair = pq.top();
         pq.pop();
         int index = pair.first;
         int binid = binids[index];
@@ -131,8 +135,8 @@ int * DensifiedMinhash::getHashEasy(int* binids, float* data, int dataLen, int t
     return hashArray;
 }
 
-
-int * DensifiedMinhash::getHash(int* indices, float* data, int* binids, int dataLen)
+template <class T>
+int * DensifiedMinhash<T>::getHash(int* indices, T* data, int* binids, int dataLen)
 {
     int *hashes = new int[_numhashes];
     int *hashArray = new int[_numhashes];
@@ -183,13 +187,18 @@ int * DensifiedMinhash::getHash(int* indices, float* data, int* binids, int data
 }
 
 
-int DensifiedMinhash::getRandDoubleHash(int binid, int count) {
+template <class T>
+int DensifiedMinhash<T>::getRandDoubleHash(int binid, int count) {
     unsigned int tohash = ((binid + 1) << 6) + count;
     return (_randHash[0] * tohash << 3) >> (32 - _lognumhash); // _lognumhash needs to be ceiled.
 }
 
 
-DensifiedMinhash::~DensifiedMinhash()
+template <class T>
+DensifiedMinhash<T>::~DensifiedMinhash()
 {
     delete[] _randHash;
 }
+
+template class DensifiedMinhash<float>;
+template class DensifiedMinhash<bfloat16>;

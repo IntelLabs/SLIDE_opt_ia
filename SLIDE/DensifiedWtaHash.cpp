@@ -6,11 +6,12 @@
 #include <climits>
 #include <algorithm>
 #include <map>
+#include "Bfloat16.h"
 #include "Config.h"
 using namespace std;
 
-
-DensifiedWtaHash::DensifiedWtaHash(int numHashes, int noOfBitsToHash)
+template <class T>
+DensifiedWtaHash<T>::DensifiedWtaHash(int numHashes, int noOfBitsToHash)
 {
 
     _numhashes = numHashes;
@@ -55,12 +56,13 @@ DensifiedWtaHash::DensifiedWtaHash(int numHashes, int noOfBitsToHash)
 }
 
 
-int * DensifiedWtaHash::getHashEasy(float* data, int dataLen, int topk)
+template <class T>
+int * DensifiedWtaHash<T>::getHashEasy(T* data, int dataLen, int topk)
 {
     // binsize is the number of times the range is larger than the total number of hashes we need.
 
     int *hashes = new int[_numhashes];
-    float *values = new float[_numhashes];
+    T *values = new T[_numhashes];
     int *hashArray = new int[_numhashes];
 
     for (int i = 0; i < _numhashes; i++)
@@ -74,7 +76,7 @@ int * DensifiedWtaHash::getHashEasy(float* data, int dataLen, int topk)
         for (int i = 0; i < dataLen; i++) {
             int inner_index = bin_index + i;
             int binid = _indices[inner_index];
-            float loc_data = data[i];
+            T loc_data = data[i];
             if(binid < _numhashes && values[binid] < loc_data) {
                 values[binid] = loc_data;
                 hashes[binid] = _pos[inner_index];
@@ -109,10 +111,11 @@ int * DensifiedWtaHash::getHashEasy(float* data, int dataLen, int topk)
     return hashArray;
 }
 
-int* DensifiedWtaHash::getHash(int* indices, float* data, int dataLen)
+template <class T>
+int* DensifiedWtaHash<T>::getHash(int* indices, T* data, int dataLen)
 {
     int *hashes = new int[_numhashes];
-    float *values = new float[_numhashes];
+    T *values = new T[_numhashes];
     int *hashArray = new int[_numhashes];
 
     // init hashes and values to INT_MIN to start
@@ -164,15 +167,19 @@ int* DensifiedWtaHash::getHash(int* indices, float* data, int dataLen)
     return hashArray;
 }
 
-
-int DensifiedWtaHash::getRandDoubleHash(int binid, int count) {
+template <class T>
+int DensifiedWtaHash<T>::getRandDoubleHash(int binid, int count) {
     unsigned int tohash = ((binid + 1) << 6) + count;
     return (_randHash[0] * tohash << 3) >> (32 - _lognumhash); // _lognumhash needs to be ceiled.
 }
 
 
-DensifiedWtaHash::~DensifiedWtaHash()
+template <class T>
+DensifiedWtaHash<T>::~DensifiedWtaHash()
 {
     delete[] _randHash;
     delete[] _indices;
 }
+
+template class DensifiedWtaHash<float>;
+template class DensifiedWtaHash<bfloat16>;

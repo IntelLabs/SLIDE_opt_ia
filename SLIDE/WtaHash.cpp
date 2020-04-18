@@ -7,10 +7,12 @@
 #include <algorithm>
 #include <map>
 #include "Config.h"
+#include "Bfloat16.h"
 using namespace std;
 
 
-WtaHash::WtaHash(int numHashes, int noOfBitsToHash)
+template <class T>
+WtaHash<T>::WtaHash(int numHashes, int noOfBitsToHash)
 {
 
     _numhashes = numHashes;
@@ -35,13 +37,14 @@ WtaHash::WtaHash(int numHashes, int noOfBitsToHash)
 }
 
 
-int * WtaHash::getHash(float* data)
+template <class T>
+int * WtaHash<T>::getHash(T* data)
 {
 
     // binsize is the number of times the range is larger than the total number of hashes we need.
 
     int *hashes = new int[_numhashes];
-    float *values = new float[_numhashes];
+    T *values = new T[_numhashes];
 
     for (int i = 0; i < _numhashes; i++)
     {
@@ -66,6 +69,10 @@ int * WtaHash::getHash(float* data)
 }
 
 
-WtaHash::~WtaHash()
+template <class T>
+WtaHash<T>::~WtaHash()
 {
 }
+
+template class WtaHash<float>;
+template class WtaHash<bfloat16>;

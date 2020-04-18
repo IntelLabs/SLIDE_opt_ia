@@ -13,12 +13,13 @@
 
 */
 using namespace std;
+template <class T>
 class WtaHash
 {
 private:
     int *_indices, _numhashes, _rangePow;
 public:
     WtaHash(int numHashes, int noOfBitsToHash);
-    int * getHash(float* data);
+    int * getHash(T* data);
     ~WtaHash();
 };

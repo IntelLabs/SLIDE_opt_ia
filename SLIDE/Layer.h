@@ -10,56 +10,57 @@
 
 using namespace std;
 
+template <class T>
 class Layer
 {
 private:
 	NodeType _type;
-	Node* _Nodes;
+	Node<T>* _Nodes;
 	int * _randNode;
 	float* _normalizationConstants;
-    int _K, _L, _RangeRow, _batchsize;
-    train* _train_array;
+  int _K, _L, _RangeRow, _batchsize;
+  train<T>* _train_array;
 
 
 public:
 	int _layerID, _noOfActive;
   size_t _previousLayerNumOfNodes;
 	size_t _noOfNodes;
-	float* _weights;
-  float* _weightGrads;
+	T* _weights;
+  T* _weightGrads;
 	float* _adamAvgMom;
 	float* _adamAvgVel;
-	float* _bias;
-  float* _biasGrads;
+	T* _bias;
+  T* _biasGrads;
   float* _adamAvgMomBias;
   float* _adamAvgVelBias;
 
   struct NodeDataOpt {
     int *indices = nullptr;
-    float *values = nullptr;
-    float *grads = nullptr;
+    T *values = nullptr;
+    T *grads = nullptr;
     bool *active = nullptr;
     int size = 0;
   };
   NodeDataOpt *_nodeDataOpt; // per each record
 
 	LSH *_hashTables;
-	WtaHash *_wtaHasher;
-    DensifiedMinhash *_MinHasher;
-    SparseRandomProjection *_srp;
-    DensifiedWtaHash *_dwtaHasher;
+	WtaHash<T> *_wtaHasher;
+  DensifiedMinhash<T> *_MinHasher;
+  SparseRandomProjection<T> *_srp;
+  DensifiedWtaHash<T> *_dwtaHasher;
 	int * _binids;
-	Layer(size_t _numNodex, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize, int K, int L, int RangePow, float Sparsity, float* weights=NULL, float* bias=NULL, float *adamAvgMom=NULL, float *adamAvgVel=NULL);
-	Node* getNodebyID(size_t nodeID);
-	Node* getAllNodes();
+	Layer(size_t _numNodex, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize, int K, int L, int RangePow, float Sparsity, T* weights=NULL, T* bias=NULL, float *adamAvgMom=NULL, float *adamAvgVel=NULL);
+	Node<T>* getNodebyID(size_t nodeID);
+	Node<T>* getAllNodes();
 	int getNodeCount();
-	void addtoHashTable(float* weights, int length, float bias, int id);
+	void addtoHashTable(T* weights, int length, T bias, int id);
 	float getNomalizationConstant(int inputID);
-	int queryActiveNodeandComputeActivations(int** activenodesperlayer, float** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
-	int queryActiveNodeandComputeActivationsOpt(int* in_indices, float* in_values, int ICI, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
-    int queryActiveNodes(int** activenodesperlayer, float** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
-    int computeActivations(int** activenodesperlayer, float** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
-    int computeSoftmax(int** activenodesperlayer, float** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
+	int queryActiveNodeandComputeActivations(int** activenodesperlayer, T** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
+	int queryActiveNodeandComputeActivationsOpt(int* in_indices, T* in_values, int ICI, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
+    int queryActiveNodes(int** activenodesperlayer, T** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
+    int computeActivations(int** activenodesperlayer, T** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
+    int computeSoftmax(int** activenodesperlayer, T** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
 	void saveWeights(string file);
 	void updateTable();
 	void updateRandomNodes();

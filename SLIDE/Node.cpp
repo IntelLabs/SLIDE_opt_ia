@@ -8,10 +8,12 @@
 #include <sys/mman.h>
 #include "Config.h"
 #include <x86intrin.h>
+#include "Bfloat16.h"
 
 using namespace std;
 
-Node::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel)
+template <class T>
+Node<T>::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, T *weights, T bias, float *adamAvgMom, float *adamAvgVel)
 {
 	_dim = dim;
 	_IDinLayer = nodeID;
@@ -23,11 +25,11 @@ Node::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, float
 	{
 		_adamAvgMom = adamAvgMom;
 		_adamAvgVel = adamAvgVel;
-		_t = new float[_dim]();
+		_t = new T[_dim]();
 
 	}
 
-	_train = new train[_currentBatchsize];
+	_train = new train<T>[_currentBatchsize];
 	_activeInputs = 0;
 
     _weights = weights;
@@ -36,7 +38,8 @@ Node::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, float
 
 }
 
-void Node::Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel, train* train_blob)
+template <class T>
+void Node<T>::Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, T *weights, T bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob)
 {
     _dim = dim;
     _IDinLayer = nodeID;
@@ -48,7 +51,7 @@ void Node::Update(int dim, int nodeID, int layerID, NodeType type, int batchsize
     {
         _adamAvgMom = adamAvgMom;
         _adamAvgVel = adamAvgVel;
-        _t = new float[_dim]();
+        _t = new T[_dim]();
 
     }
 
@@ -61,7 +64,8 @@ void Node::Update(int dim, int nodeID, int layerID, NodeType type, int batchsize
 
 }
 
-float Node::getLastActivation(int inputID)
+template <class T>
+T Node<T>::getLastActivation(int inputID)
 {
 	if(_train[inputID]._ActiveinputIds != 1)
 		return 0.0;
@@ -69,24 +73,28 @@ float Node::getLastActivation(int inputID)
 }
 
 
-void Node::incrementDelta(int inputID, float incrementValue)
+template <class T>
+void Node<T>::incrementDelta(int inputID, T incrementValue)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	if (_train[inputID]._lastActivations > 0)
 	    _train[inputID]._lastDeltaforBPs += incrementValue;
 }
 
-bool Node::getInputActive(int inputID)
+template <class T>
+bool Node<T>::getInputActive(int inputID)
 {
     return _train[inputID]._ActiveinputIds == 1;
 }
 
-bool Node::getActiveInputs(void)
+template <class T>
+bool Node<T>::getActiveInputs(void)
 {
     return _activeInputs > 0;
 }
 
-float Node::getActivation(int* indices, float* values, int length, int inputID)
+template <class T>
+T Node<T>::getActivation(int* indices, T* values, int length, int inputID)
 {
 	assert(("Input ID more than Batch Size", inputID <= _currentBatchsize));
 
@@ -130,7 +138,8 @@ float Node::getActivation(int* indices, float* values, int length, int inputID)
 }
 
 
-void Node::ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, int* label, int labelsize)
+template <class T>
+void Node<T>::ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, int* label, int labelsize)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds ==1));
 
@@ -146,7 +155,8 @@ void Node::ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, 
 	}
 }
 
-void Node::ComputeExtaStatsForSoftMaxOpt(float &value, float &grad, float normalizationConstant, int inputID, int* label, int labelsize)
+template <class T>
+void Node<T>::ComputeExtaStatsForSoftMaxOpt(T &value, T &grad, float normalizationConstant, int inputID, int* label, int labelsize)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds ==1));
 
@@ -161,7 +171,8 @@ void Node::ComputeExtaStatsForSoftMaxOpt(float &value, float &grad, float normal
 	}
 }
 
-void Node::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
+template <class T>
+void Node<T>::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < previousLayerActiveNodeSize; i++)
@@ -170,7 +181,7 @@ void Node::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, i
 	    Node* prev_node = &(previousNodes[previousLayerActiveNodeIds[i]]);
 	    prev_node->incrementDelta(inputID, _train[inputID]._lastDeltaforBPs * _weights[previousLayerActiveNodeIds[i]]);
 
-		float grad_t = _train[inputID]._lastDeltaforBPs * prev_node->getLastActivation(inputID);
+		T grad_t = _train[inputID]._lastDeltaforBPs * prev_node->getLastActivation(inputID);
 
 		if (ADAM)
 		{
@@ -184,8 +195,8 @@ void Node::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, i
 
 	if (ADAM)
 	{
-		float biasgrad_t = _train[inputID]._lastDeltaforBPs;
-		float biasgrad_tsq = biasgrad_t * biasgrad_t;
+		T biasgrad_t = _train[inputID]._lastDeltaforBPs;
+		T biasgrad_tsq = biasgrad_t * biasgrad_t;
 		_tbias += biasgrad_t;
 	}
 	else
@@ -200,7 +211,8 @@ void Node::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, i
 
 }
 
-void Node::backPropagateOpt(float &value, float &grad, float *prevValues, float *prevGrads, Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
+template <class T>
+void Node<T>::backPropagateOpt(T &value, T &grad, T *prevValues, T *prevGrads, Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < previousLayerActiveNodeSize; i++)
@@ -212,7 +224,7 @@ void Node::backPropagateOpt(float &value, float &grad, float *prevValues, float 
       }
 
 
-		float grad_t = grad * prevValues[i];
+		T grad_t = grad * prevValues[i];
 
 		if (ADAM)
 		{
@@ -226,8 +238,8 @@ void Node::backPropagateOpt(float &value, float &grad, float *prevValues, float 
 
 	if (ADAM)
 	{
-		float biasgrad_t = grad;
-		float biasgrad_tsq = biasgrad_t * biasgrad_t;
+		T biasgrad_t = grad;
+		T biasgrad_tsq = biasgrad_t * biasgrad_t;
 		_tbias += biasgrad_t;
 	}
 	else
@@ -243,13 +255,14 @@ void Node::backPropagateOpt(float &value, float &grad, float *prevValues, float 
 }
 
 
-void Node::backPropagateFirstLayer(int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID)
+template <class T>
+void Node<T>::backPropagateFirstLayer(int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < nnzSize; i++)
 	{
-		float grad_t = _train[inputID]._lastDeltaforBPs * nnzvalues[i];
-		float grad_tsq = grad_t * grad_t;
+		T grad_t = _train[inputID]._lastDeltaforBPs * nnzvalues[i];
+		T grad_tsq = grad_t * grad_t;
 		if (ADAM)
 		{
 			_t[nnzindices[i]] += grad_t;
@@ -262,8 +275,8 @@ void Node::backPropagateFirstLayer(int* nnzindices, float* nnzvalues, int nnzSiz
 
 	if (ADAM)
 	{
-		float biasgrad_t = _train[inputID]._lastDeltaforBPs;
-		float biasgrad_tsq = biasgrad_t * biasgrad_t;
+		T biasgrad_t = _train[inputID]._lastDeltaforBPs;
+		T biasgrad_tsq = biasgrad_t * biasgrad_t;
 		_tbias += biasgrad_t;
 	}
 	else
@@ -277,13 +290,14 @@ void Node::backPropagateFirstLayer(int* nnzindices, float* nnzvalues, int nnzSiz
     _activeInputs--;
 }
 
-void Node::backPropagateFirstLayerOpt(float &value, float &grad, int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID)
+template <class T>
+void Node<T>::backPropagateFirstLayerOpt(T &value, T &grad, int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < nnzSize; i++)
 	{
-		float grad_t = grad * nnzvalues[i];
-		float grad_tsq = grad_t * grad_t;
+		T grad_t = grad * nnzvalues[i];
+		T grad_tsq = grad_t * grad_t;
 		if (ADAM)
 		{
 			_t[nnzindices[i]] += grad_t;
@@ -296,8 +310,8 @@ void Node::backPropagateFirstLayerOpt(float &value, float &grad, int* nnzindices
 
 	if (ADAM)
 	{
-		float biasgrad_t = grad;
-		float biasgrad_tsq = biasgrad_t * biasgrad_t;
+		T biasgrad_t = grad;
+		T biasgrad_tsq = biasgrad_t * biasgrad_t;
 		_tbias += biasgrad_t;
 	}
 	else
@@ -312,12 +326,14 @@ void Node::backPropagateFirstLayerOpt(float &value, float &grad, int* nnzindices
 }
 
 
-void Node::SetlastActivation(int inputID, float realActivation)
+template <class T>
+void Node<T>::SetlastActivation(int inputID, T realActivation)
 {
     _train[inputID]._lastActivations = realActivation;
 }
 
-Node::~Node()
+template <class T>
+Node<T>::~Node()
 {
 
 	delete[] _indicesInTables;
@@ -333,14 +349,19 @@ Node::~Node()
 
 
 // for debugging gradients.
-float Node::purturbWeight(int weightid, float delta)
+template <class T>
+T Node<T>::purturbWeight(int weightid, T delta)
 {
 	_weights[weightid] += delta;
 	return _weights[weightid];
 }
 
 
-float Node::getGradient(int weightid, int inputID, float InputVal)
+template <class T>
+T Node<T>::getGradient(int weightid, int inputID, T InputVal)
 {
 	return -_train[inputID]._lastDeltaforBPs * InputVal;
 }
+
+template class Node<float>;
+template class Node<bfloat16>;

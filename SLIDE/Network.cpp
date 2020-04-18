@@ -8,10 +8,11 @@
 using namespace std;
 
 
-Network::Network(int *sizesOfLayers, NodeType *layersTypes, int noOfLayers, int batchSize, float lr, int inputdim,  int* K, int* L, int* RangePow, float* Sparsity, cnpy::npz_t arr) {
+template <class T>
+Network<T>::Network(int *sizesOfLayers, NodeType *layersTypes, int noOfLayers, int batchSize, float lr, int inputdim,  int* K, int* L, int* RangePow, float* Sparsity, cnpy::npz_t arr) {
 
     _numberOfLayers = noOfLayers;
-    _hiddenlayers = new Layer *[noOfLayers];
+    _hiddenlayers = new Layer<T> *[noOfLayers];
     _sizesOfLayers = sizesOfLayers;
     _layersTypes = layersTypes;
     _learningRate = lr;
@@ -22,42 +23,45 @@ Network::Network(int *sizesOfLayers, NodeType *layersTypes, int noOfLayers, int 
     for (int i = 0; i < noOfLayers; i++) {
         if (i != 0) {
             cnpy::NpyArray weightArr, biasArr, adamArr, adamvArr;
-            float* weight, *bias, *adamAvgMom, *adamAvgVel;
+            T* weight, *bias;
+            float *adamAvgMom, *adamAvgVel;
             if(LOADWEIGHT){
                 weightArr = arr["w_layer_"+to_string(i)];
-                weight = weightArr.data<float>();
+                weight = weightArr.data<T>();
                 biasArr = arr["b_layer_"+to_string(i)];
-                bias = biasArr.data<float>();
+                bias = biasArr.data<T>();
 
                 adamArr = arr["am_layer_"+to_string(i)];
                 adamAvgMom = adamArr.data<float>();
                 adamvArr = arr["av_layer_"+to_string(i)];
                 adamAvgVel = adamvArr.data<float>();
             }
-            _hiddenlayers[i] = new Layer(sizesOfLayers[i], sizesOfLayers[i - 1], i, _layersTypes[i], _currentBatchSize,  K[i], L[i], RangePow[i], Sparsity[i], weight, bias, adamAvgMom, adamAvgVel);
+            _hiddenlayers[i] = new Layer<T>(sizesOfLayers[i], sizesOfLayers[i - 1], i, _layersTypes[i], _currentBatchSize,  K[i], L[i], RangePow[i], Sparsity[i], weight, bias, adamAvgMom, adamAvgVel);
         } else {
 
             cnpy::NpyArray weightArr, biasArr, adamArr, adamvArr;
-            float* weight, *bias, *adamAvgMom, *adamAvgVel;
+            T* weight, *bias;
+            float *adamAvgMom, *adamAvgVel;
             if(LOADWEIGHT){
                 weightArr = arr["w_layer_"+to_string(i)];
-                weight = weightArr.data<float>();
+                weight = weightArr.data<T>();
                 biasArr = arr["b_layer_"+to_string(i)];
-                bias = biasArr.data<float>();
+                bias = biasArr.data<T>();
 
                 adamArr = arr["am_layer_"+to_string(i)];
                 adamAvgMom = adamArr.data<float>();
                 adamvArr = arr["av_layer_"+to_string(i)];
                 adamAvgVel = adamvArr.data<float>();
             }
-            _hiddenlayers[i] = new Layer(sizesOfLayers[i], inputdim, i, _layersTypes[i], _currentBatchSize, K[i], L[i], RangePow[i], Sparsity[i], weight, bias, adamAvgMom, adamAvgVel);
+            _hiddenlayers[i] = new Layer<T>(sizesOfLayers[i], inputdim, i, _layersTypes[i], _currentBatchSize, K[i], L[i], RangePow[i], Sparsity[i], weight, bias, adamAvgMom, adamAvgVel);
         }
     }
     cout << "after layer" << endl;
 }
 
 
-Layer *Network::getLayer(int LayerID) {
+template <class T>
+Layer<T> *Network<T>::getLayer(int LayerID) {
     if (LayerID < _numberOfLayers)
         return _hiddenlayers[LayerID];
     else {
@@ -66,7 +70,8 @@ Layer *Network::getLayer(int LayerID) {
     }
 }
 
-int Network::predictClassOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex) {
+template <class T>
+int Network<T>::predictClassOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex) {
   alignas(64) int correctPred = 0;
 
   auto t1 = std::chrono::high_resolution_clock::now();
@@ -74,7 +79,7 @@ int Network::predictClassOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex) {
   for (int n = 0; n < _currentBatchSize; n++) {
     int ICI;
     int *in_indices;
-    float *in_values;
+    T *in_values;
     size_t recordIndex = batchIndex * _currentBatchSize + n;
     int *labels = dataLayerOpt.labelsByRecordIndex(recordIndex);
     int labelSize = dataLayerOpt.labelLengthByRecordIndex(recordIndex);
@@ -97,10 +102,10 @@ int Network::predictClassOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex) {
 
     // compute softmax
     int noOfClasses = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].size;
-    float max_act = -222222222;
+    T max_act = -222222222;
     int predict_class = -1;
     for (int k = 0; k < noOfClasses; k++) {
-      float cur_act = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].values[k];
+      T cur_act = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].values[k];
       if (max_act < cur_act) {
         max_act = cur_act;
         predict_class = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].indices[k];
@@ -119,14 +124,15 @@ int Network::predictClassOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex) {
 
 }
 
-int Network::predictClass(int **inputIndices, float **inputValues, int *length, int **labels, int *labelsize) {
+template <class T>
+int Network<T>::predictClass(int **inputIndices, T **inputValues, int *length, int **labels, int *labelsize) {
     alignas(64) int correctPred = 0;
 
     auto t1 = std::chrono::high_resolution_clock::now();
     #pragma omp parallel for reduction(+:correctPred)
     for (int i = 0; i < _currentBatchSize; i++) {
         int **activenodesperlayer = new int *[_numberOfLayers + 1]();
-        float **activeValuesperlayer = new float *[_numberOfLayers + 1]();
+        T **activeValuesperlayer = new T *[_numberOfLayers + 1]();
         int *sizes = new int[_numberOfLayers + 1]();
 
         activenodesperlayer[0] = inputIndices[i];
@@ -171,7 +177,8 @@ int Network::predictClass(int **inputIndices, float **inputValues, int *length, 
 }
 
 
-int Network::ProcessInput(int **inputIndices, float **inputValues, int *lengths, int **labels, int *labelsize, int iter, bool rehash, bool rebuild) {
+template <class T>
+int Network<T>::ProcessInput(int **inputIndices, T **inputValues, int *lengths, int **labels, int *labelsize, int iter, bool rehash, bool rebuild) {
 
     float logloss = 0.0;
     int* avg_retrieval = new int[_numberOfLayers]();
@@ -196,12 +203,12 @@ int Network::ProcessInput(int **inputIndices, float **inputValues, int *lengths,
     if (DEBUG)
       t1 = std::chrono::high_resolution_clock::now();
     int*** activeNodesPerBatch = new int**[_currentBatchSize];
-    float*** activeValuesPerBatch = new float**[_currentBatchSize];
+    T*** activeValuesPerBatch = new T**[_currentBatchSize];
     int** sizesPerBatch = new int*[_currentBatchSize];
 #pragma omp parallel for
     for (int i = 0; i < _currentBatchSize; i++) {
         int **activenodesperlayer = new int *[_numberOfLayers + 1]();
-        float **activeValuesperlayer = new float *[_numberOfLayers + 1]();
+        T **activeValuesperlayer = new T *[_numberOfLayers + 1]();
         int *sizes = new int[_numberOfLayers + 1]();
 
         activeNodesPerBatch[i] = activenodesperlayer;
@@ -222,11 +229,11 @@ int Network::ProcessInput(int **inputIndices, float **inputValues, int *lengths,
         //Now backpropagate.
         // layers
         for (int j = _numberOfLayers - 1; j >= 0; j--) {
-            Layer* layer = _hiddenlayers[j];
-            Layer* prev_layer = _hiddenlayers[j - 1];
+            Layer<T>* layer = _hiddenlayers[j];
+            Layer<T>* prev_layer = _hiddenlayers[j - 1];
             // nodes
             for (int k = 0; k < sizesPerBatch[i][j + 1]; k++) {
-                Node* node = layer->getNodebyID(activeNodesPerBatch[i][j + 1][k]);
+                Node<T>* node = layer->getNodebyID(activeNodesPerBatch[i][j + 1][k]);
                 if (j == _numberOfLayers - 1) {
                     //TODO: Compute Extra stats: labels[i];
                     node->ComputeExtaStatsForSoftMax(layer->getNomalizationConstant(i), i, labels[i], labelsize[i]);
@@ -281,14 +288,14 @@ int Network::ProcessInput(int **inputIndices, float **inputValues, int *lengths,
 #pragma omp parallel for
         for (size_t m = 0; m < _hiddenlayers[l]->_noOfNodes; m++)
         {
-            Node *tmp = _hiddenlayers[l]->getNodebyID(m);
+            Node<T> *tmp = _hiddenlayers[l]->getNodebyID(m);
             int dim = tmp->_dim;
-            float* local_weights = new float[dim];
+            T* local_weights = new T[dim];
             std::copy(tmp->_weights, tmp->_weights + dim, local_weights);
 
             if(ADAM){
                 for (int d=0; d < dim;d++){
-                    float _t = tmp->_t[d];
+                    T _t = tmp->_t[d];
                     float Mom = tmp->_adamAvgMom[d];
                     float Vel = tmp->_adamAvgVel[d];
                     Mom = BETA1 * Mom + (1 - BETA1) * _t;
@@ -347,7 +354,8 @@ int Network::ProcessInput(int **inputIndices, float **inputValues, int *lengths,
     return logloss;
 }
 
-int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
+template <class T>
+int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex,
                              int iter, bool rehash, bool rebuild) {
 
   float logloss = 0.0;
@@ -382,7 +390,7 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
 
     int ICI;
     int *in_indices;
-    float *in_values;
+    T *in_values;
     for (int l = 0; l < _numberOfLayers; l++) {
       if (l == 0) {
         ICI = dataLayerOpt.lengthByRecordIndex(recordIndex);
@@ -401,8 +409,8 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
 
     // Now backpropagate.
     for (int l = _numberOfLayers - 1; l >= 0; l--) {
-      Layer* layer = _hiddenlayers[l];
-      Layer* prev_layer = _hiddenlayers[l - 1];
+      Layer<T>* layer = _hiddenlayers[l];
+      Layer<T>* prev_layer = _hiddenlayers[l - 1];
       int OCI = layer->_nodeDataOpt[n].size;
 
       // ComputeExtaStatsForSoftMaxOpt
@@ -410,8 +418,8 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
         for (int oci = 0; oci < OCI; oci++) {
           int oc = layer->_nodeDataOpt[n].indices[oci];
           bool &active = layer->_nodeDataOpt[n].active[oci];
-          float &value = layer->_nodeDataOpt[n].values[oci];
-          float &grad = layer->_nodeDataOpt[n].grads[oci];
+          T &value = layer->_nodeDataOpt[n].values[oci];
+          T &grad = layer->_nodeDataOpt[n].grads[oci];
 
           assert(("Input Not Active but still called !! BUG", active));
           value /= layer->getNomalizationConstant(n) + 0.0000001;
@@ -428,18 +436,18 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
         for (int oci = 0; oci < OCI; oci++) {
           int oc = layer->_nodeDataOpt[n].indices[oci];
           bool &active = layer->_nodeDataOpt[n].active[oci];
-          float &value = layer->_nodeDataOpt[n].values[oci];
-          float &grad = layer->_nodeDataOpt[n].grads[oci];
-          float *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
-          float &gb = layer->_biasGrads[oc];
+          T &value = layer->_nodeDataOpt[n].values[oci];
+          T &grad = layer->_nodeDataOpt[n].grads[oci];
+          T *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
+          T &gb = layer->_biasGrads[oc];
 
           assert(("Input Not Active but still called !! BUG", active));
           for (int ici = 0; ici < dataLayerOpt.lengthByRecordIndex(recordIndex); ici++) {
             int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
-            float *gw = &layer->_weightGrads[layer->_previousLayerNumOfNodes * oc];
+            T *gw = &layer->_weightGrads[layer->_previousLayerNumOfNodes * oc];
 
-            float grad_t = grad * prevValues[ici];
-            float grad_tsq = grad_t * grad_t;
+            T grad_t = grad * prevValues[ici];
+            T grad_tsq = grad_t * grad_t;
             if (ADAM) {
               gw[ic] += grad_t;
             } else {
@@ -447,8 +455,8 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
             }
           }
           if (ADAM) {
-            float biasgrad_t = grad;
-            float biasgrad_tsq = biasgrad_t * biasgrad_t;
+            T biasgrad_t = grad;
+            T biasgrad_tsq = biasgrad_t * biasgrad_t;
             gb += biasgrad_t;
           } else {
             gb += tmplr * grad;
@@ -459,25 +467,25 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
         }
       } else {
         // backPropagateOpt
-        float *prevValues = prev_layer->_nodeDataOpt[n].values;
-        float *prevGrads = prev_layer->_nodeDataOpt[n].grads;
+        T *prevValues = prev_layer->_nodeDataOpt[n].values;
+        T *prevGrads = prev_layer->_nodeDataOpt[n].grads;
 
         for (int oci = 0; oci < layer->_nodeDataOpt[n].size; oci++) {
           int oc = layer->_nodeDataOpt[n].indices[oci];
           bool &active = layer->_nodeDataOpt[n].active[oci];
-          float &value = layer->_nodeDataOpt[n].values[oci];
-          float &grad = layer->_nodeDataOpt[n].grads[oci];
-          float &gb = layer->_biasGrads[oc];
+          T &value = layer->_nodeDataOpt[n].values[oci];
+          T &grad = layer->_nodeDataOpt[n].grads[oci];
+          T &gb = layer->_biasGrads[oc];
 
           assert(("Input Not Active but still called !! BUG", active));
           for (int ici = 0; ici < prev_layer->_nodeDataOpt[n].size; ici++) {
             int ic = prev_layer->_nodeDataOpt[n].indices[ici];
-            float *w = &layer->_weights[layer->_previousLayerNumOfNodes * oc];
-            float *gw = &layer->_weightGrads[layer->_previousLayerNumOfNodes * oc];
+            T *w = &layer->_weights[layer->_previousLayerNumOfNodes * oc];
+            T *gw = &layer->_weightGrads[layer->_previousLayerNumOfNodes * oc];
             if (prevValues[ici] > 0) {
               prevGrads[ici] += grad * w[ic];
             }
-            float grad_t = grad * prevValues[ici];
+            T grad_t = grad * prevValues[ici];
             if (ADAM) {
               gw[ic] += grad_t;
             } else {
@@ -485,8 +493,8 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
             }
           }
           if (ADAM) {
-            float biasgrad_t = grad;
-            float biasgrad_tsq = biasgrad_t * biasgrad_t;
+            T biasgrad_t = grad;
+            T biasgrad_tsq = biasgrad_t * biasgrad_t;
             gb += biasgrad_t;
           } else {
             gb += tmplr * grad;
@@ -523,24 +531,24 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
       _hiddenlayers[l]->updateTable();
     }
     int ratio = 1;
-    Layer *layer = _hiddenlayers[l];
+    Layer<T> *layer = _hiddenlayers[l];
     size_t OC = _hiddenlayers[l]->_noOfNodes;
     size_t IC = _hiddenlayers[l]->_previousLayerNumOfNodes;
 #pragma omp parallel for
     for (size_t oc = 0; oc < OC; oc++) {
       if (ADAM) {
         for (size_t ic = 0; ic < IC; ic++) {
-          float &gw = layer->_weightGrads[IC * oc + ic];
+          T &gw = layer->_weightGrads[IC * oc + ic];
           float &mom = layer->_adamAvgMom[IC * oc + ic];
           float &vel = layer->_adamAvgVel[IC * oc + ic];
-          float &w = layer->_weights[IC * oc + ic];
+          T &w = layer->_weights[IC * oc + ic];
           mom = BETA1 * mom + (1 - BETA1) * gw;
           vel = BETA2 * vel + (1 - BETA2) * gw * gw;
           w += ratio * tmplr * mom / (sqrt(vel) + EPS);
           gw = 0;
         }
-        float &gb = layer->_biasGrads[oc];
-        float &b = layer->_bias[oc];
+        T &gb = layer->_biasGrads[oc];
+        T &b = layer->_bias[oc];
         float &bmom = layer->_adamAvgMomBias[oc];
         float &bvel = layer->_adamAvgVelBias[oc];
         bmom = BETA1 * bmom + (1 - BETA1) * gb;
@@ -551,7 +559,7 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
 
       if (tmpRehash) {
         size_t dim = IC;
-        float *local_weights = &layer->_weights[IC * oc];
+        T *local_weights = &layer->_weights[IC * oc];
         int *hashes;
         if(HashFunction==1) {
           hashes = _hiddenlayers[l]->_wtaHasher->getHash(local_weights);
@@ -588,7 +596,8 @@ int Network::ProcessInputOpt(DataLayerOpt &dataLayerOpt, size_t batchIndex,
 
 
 
-void Network::saveWeights(string file)
+template <class T>
+void Network<T>::saveWeights(string file)
 {
     for (int i=0; i< _numberOfLayers; i++){
         _hiddenlayers[i]->saveWeights(file);
@@ -596,7 +605,8 @@ void Network::saveWeights(string file)
 }
 
 
-Network::~Network() {
+template <class T>
+Network<T>::~Network() {
 
     delete[] _sizesOfLayers;
     for (int i=0; i< _numberOfLayers; i++){
@@ -605,3 +615,6 @@ Network::~Network() {
     delete[] _hiddenlayers;
     delete[] _layersTypes;
 }
+
+template class Network<float>;
+template class Network<bfloat16>;

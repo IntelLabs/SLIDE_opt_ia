@@ -13,10 +13,11 @@ using namespace std;
 enum NodeType
 { ReLU, Softmax};
 
+template <class T>
 struct train {
-    float _lastDeltaforBPs;
-    float _lastActivations;
-    float _lastGradients;
+    T _lastDeltaforBPs;
+    T _lastActivations;
+    T _lastGradients;
     int _ActiveinputIds;
 
     void * operator new(size_t size){
@@ -52,16 +53,17 @@ struct train {
     void* operator new[] (std::size_t size, const std::nothrow_t& nothrow_value){return operator new (size);};
     void* operator new[] (std::size_t size, void* ptr){return operator new (size);};
 
-    void operator delete(void * ptr){munmap(ptr, sizeof(train));};
-    void operator delete (void* ptr, const std::nothrow_t& nothrow_constant){munmap(ptr, sizeof(train));};
+    void operator delete(void * ptr){munmap(ptr, sizeof(train<T>));};
+    void operator delete (void* ptr, const std::nothrow_t& nothrow_constant){munmap(ptr, sizeof(train<T>));};
     void operator delete (void* ptr, void* voidptr2){};
     // TODO: The size to be munmap'd should be the entire array, not just a single object
-    void operator delete[](void * ptr){munmap(ptr, sizeof(train));};
-    void operator delete[] (void* ptr, const std::nothrow_t& nothrow_constant){munmap(ptr, sizeof(train));};
+    void operator delete[](void * ptr){munmap(ptr, sizeof(train<T>));};
+    void operator delete[] (void* ptr, const std::nothrow_t& nothrow_constant){munmap(ptr, sizeof(train<T>));};
     void operator delete[] (void* ptr, void* voidptr2){};
 
 } __attribute__ ((aligned (64)));
 
+template <class T>
 class Node
 {
 private:
@@ -70,39 +72,39 @@ private:
 
 
 public:
-	train* _train;
-    int _currentBatchsize;
-    size_t _dim, _layerNum, _IDinLayer;
+	train<T>* _train;
+  int _currentBatchsize;
+  size_t _dim, _layerNum, _IDinLayer;
 	int* _indicesInTables;
 	int* _indicesInBuckets;
-	float* _weights;
-	float* _mirrorWeights;
+	T* _weights;
+	T* _mirrorWeights;
 	float* _adamAvgMom;
 	float* _adamAvgVel;
-	float* _t; //for adam
+	T* _t; //for adam
 	int* _update;
-	float _bias =0;
-	float _tbias = 0;
+	T _bias =0;
+	T _tbias = 0;
 	float _adamAvgMombias=0;
 	float _adamAvgVelbias=0;
 	float _mirrorbias =0;
 
 	Node(){};
-	Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel);
-	void Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel, train* train_blob);
-	void updateWeights(float* newWeights, float newbias);
-	float getLastActivation(int inputID);
-	void incrementDelta(int inputID, float incrementValue);
-	float getActivation(int* indices, float* values, int length, int inputID);
+	Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, T *weights, T bias, float *adamAvgMom, float *adamAvgVel);
+	void Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, T *weights, T bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob);
+	void updateWeights(T* newWeights, T newbias);
+	T getLastActivation(int inputID);
+	void incrementDelta(int inputID, T incrementValue);
+	T getActivation(int* indices, T* values, int length, int inputID);
 	bool getInputActive(int inputID);
 	bool getActiveInputs(void);
-	void SetlastActivation(int inputID, float realActivation);
+	void SetlastActivation(int inputID, T realActivation);
 	void ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, int* label, int labelsize);
-	void ComputeExtaStatsForSoftMaxOpt(float &value, float &grad, float normalizationConstant, int inputID, int* label, int labelsize);
+	void ComputeExtaStatsForSoftMaxOpt(T &value, T &grad, float normalizationConstant, int inputID, int* label, int labelsize);
 	void backPropagate(Node* previousNodes,int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID);
-	void backPropagateOpt(float &value, float &grad, float *prevValues, float *prevGrads, Node* previousNodes,int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID);
-	void backPropagateFirstLayer(int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID);
-	void backPropagateFirstLayerOpt(float &value, float &grad, int* nnzindices, float* nnzvalues, int nnzSize, float learningRate, int inputID);
+	void backPropagateOpt(T &value, T &grad, T *prevValues, T *prevGrads, Node* previousNodes,int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID);
+	void backPropagateFirstLayer(int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID);
+	void backPropagateFirstLayerOpt(T &value, T &grad, int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID);
 	~Node();
 
     void * operator new(size_t size){
@@ -149,6 +151,6 @@ public:
     void operator delete[] (void* ptr, void* voidptr2){};
 
 	//only for debugging
-	float purturbWeight(int weightid, float delta);
-	float getGradient(int weightid, int inputID, float InputVal);
+	T purturbWeight(int weightid, T delta);
+	T getGradient(int weightid, int inputID, T InputVal);
 };

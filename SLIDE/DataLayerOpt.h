@@ -4,8 +4,10 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include "Bfloat16.h"
 
 
+template <class T>
 struct DataLayerOpt {
   size_t numRecords_;
   size_t numFeatures_;
@@ -15,7 +17,7 @@ struct DataLayerOpt {
   std::vector<int> offsets_;
   std::vector<int> lengths_;
   std::vector<int> indices_;
-  std::vector<float> values_;
+  std::vector<T> values_;
 
   // labels
   std::vector<int> labelOffsets_;
@@ -31,7 +33,7 @@ struct DataLayerOpt {
   inline int *indicesByRecordIndex(size_t n) {
     return indices_.data() + offsets_[n];
   }
-  inline float *valuesByRecordIndex(size_t n) {
+  inline T *valuesByRecordIndex(size_t n) {
     return values_.data() + offsets_[n];
   }
   inline int labelLengthByRecordIndex(size_t n) {
