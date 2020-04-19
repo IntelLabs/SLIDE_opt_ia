@@ -102,15 +102,17 @@ int Network<T>::predictClassOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
     // compute softmax
     int noOfClasses = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].size;
-    T max_act = -222222222;
+    float max_act = -222222222;
     int predict_class = -1;
+    int max_act_index = 0;
     for (int k = 0; k < noOfClasses; k++) {
-      T cur_act = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].values[k];
+      float cur_act = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].values[k];
       if (max_act < cur_act) {
         max_act = cur_act;
-        predict_class = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].indices[k];
+        max_act_index = k;
       }
     }
+    predict_class = _hiddenlayers[_numberOfLayers - 1]->_nodeDataOpt[n].indices[max_act_index];
 
     if (std::find(labels, labels + labelSize, predict_class) != labels + labelSize) {
       correctPred++;

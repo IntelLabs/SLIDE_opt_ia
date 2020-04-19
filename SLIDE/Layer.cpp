@@ -758,8 +758,6 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
 
   //***********************************
   float maxValue = 0;
-  if (_type == NodeType::Softmax)
-    _normalizationConstants[inputID] = 0;
 
   // find activation for all ACTIVE nodes in layer
   for (int oci = 0; oci < OCI; oci++) {
@@ -770,17 +768,12 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
     T *w = &_weights[oc * _previousLayerNumOfNodes];
 
     if (!active) active = true; // initialize active to false;
-#define PF_STR 32
     float res = _bias[oc];
-    for (int ici = 0; ici < ICI; ici++)
-    {
+    for (int ici = 0; ici < ICI; ici++) {
       res += float(w[in_indices[ici]]) * float(in_values[ici]);
-      //if (ici + PF_STR < ICI)
-      //  _mm_prefetch(&w[in_indices[ici + PF_STR]], _MM_HINT_T0);
     }
 
-    switch (_type)
-    {
+    switch (_type) {
     case NodeType::ReLU:
       if (res < 0) {
         res = 0;
@@ -830,6 +823,7 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
     float sum = _mm512_reduce_add_ps(vec_sum);
     _normalizationConstants[inputID] = sum;
 #else
+    _normalizationConstants[inputID] = 0;
     for (int oci = 0; oci < OCI; oci++) {
       float v = _nodeDataOpt[inputID].values[oci];
       float realActivation = exp(v - maxValue);
