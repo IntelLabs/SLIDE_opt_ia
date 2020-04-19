@@ -101,7 +101,9 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
 
     auto t1 = std::chrono::high_resolution_clock::now();
 
+#if !OPT_IA
     _train_array = new train<T>[noOfNodes*batchsize];
+#endif
 
     // create nodes for this layer
 #pragma omp parallel for
@@ -886,7 +888,6 @@ Layer<T>::~Layer()
 
     delete[] _adamAvgMom;
     delete[] _adamAvgVel;
-    delete[] _Nodes;
     delete[] _weights;
     delete[] _bias;
 
@@ -895,7 +896,10 @@ Layer<T>::~Layer()
     delete _srp;
     delete _MinHasher;
     delete [] _randNode;
+#if !OPT_IA
+    delete[] _Nodes;
     delete[] _train_array;
+#endif
 }
 
 template class Layer<float>;
