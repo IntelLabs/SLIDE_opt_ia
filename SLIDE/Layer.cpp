@@ -777,72 +777,119 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
   int IC = _previousLayerNumOfNodes;
   int OC = _noOfNodes;
 
-  // find activation for all ACTIVE nodes in layer
-  for (int oci = 0; oci < OCI; oci++) {
-    bool &active = _nodeDataOpt[inputID].active[oci];
-    T &grad = _nodeDataOpt[inputID].grads[oci];
-    T &value = _nodeDataOpt[inputID].values[oci];
-    int oc = _nodeDataOpt[inputID].indices[oci];
-
-    if (!active) active = true; // initialize active to false;
-    float res = _bias[oc];
-    if (_weightsOrder == WeightsOrder::OI) {
+#if OPT_VEC512
+  constexpr int V = 16;
+  if (_weightsOrder == WeightsOrder::IO && OC == OCI) {
+    int O2 = (OCI + V - 1) / V;
+    int Vr = OCI % V ? OCI % V : V;
+    __m512 vec_max = _mm512_setzero_ps();
+    __m512 vec_zero = _mm512_setzero_ps();
+    for (int o2 = 0; o2 < O2; o2++) {
+      int Vx = o2 == O2 - 1 ? Vr : V;
+      __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+      __m512 vec_out;
+      if (std::is_same<float, T>::value) {
+        vec_out = _mm512_maskz_load_ps(k, &_bias[o2 * V]);
+      } else {
+        // TODO: bf16
+      }
       for (int ici = 0; ici < ICI; ici++) {
         int ic = in_indices[ici];
-        res += float(_weights[oc * IC + ic]) * float(in_values[ici]);
+        __m512 vec_wei;
+        if (std::is_same<float, T>::value) {
+          vec_wei = _mm512_maskz_load_ps(k, &_weights[ic * OC + o2 * V]);
+        } else {
+          // TODO: bf16
+        }
+        float in = in_values[ici];
+        __m512 vec_in = _mm512_set1_ps(in);
+        vec_out += vec_in * vec_wei;
       }
-    } else {
-      for (int ici = 0; ici < ICI; ici++) {
-        int ic = in_indices[ici];
-        res += float(_weights[ic * OC + oc]) * float(in_values[ici]);
+      if (_type == NodeType::ReLU) {
+        vec_out = _mm512_max_ps(vec_out, vec_zero);
+      } else if (_type == NodeType::Softmax) {
+        vec_max = _mm512_max_ps(vec_out, vec_max);
+      }
+      if (std::is_same<float, T>::value) {
+        _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o2 * V],
+                              k, vec_out);
+        //_mm512_mask_storeu_ps(&_nodeDataOpt[inputID].grads[o2 * V],
+        //                      k, vec_zero);
+
+      } else {
+        // TODO: bf16
       }
     }
+    if (_type == NodeType::Softmax)
+      maxValue = _mm512_reduce_max_ps(vec_max);
+  } else
+#endif
+  {
+    // find activation for all ACTIVE nodes in layer
+    for (int oci = 0; oci < OCI; oci++) {
+      bool &active = _nodeDataOpt[inputID].active[oci];
+      T &grad = _nodeDataOpt[inputID].grads[oci];
+      T &value = _nodeDataOpt[inputID].values[oci];
+      int oc = _nodeDataOpt[inputID].indices[oci];
 
-    switch (_type) {
-    case NodeType::ReLU:
-      if (res < 0) {
-        res = 0;
-        grad = 0;
+      if (!active) active = true; // initialize active to false;
+      float res = _bias[oc];
+      if (_weightsOrder == WeightsOrder::OI) {
+        for (int ici = 0; ici < ICI; ici++) {
+          int ic = in_indices[ici];
+          res += float(_weights[oc * IC + ic]) * float(in_values[ici]);
+        }
+      } else {
+        for (int ici = 0; ici < ICI; ici++) {
+          int ic = in_indices[ici];
+          res += float(_weights[ic * OC + oc]) * float(in_values[ici]);
+        }
       }
-      break;
-    case NodeType::Softmax:
-      break;
-    default:
-      cout << "Invalid Node type from Constructor" <<endl;
-      break;
-    }
-    value = res;
+      value = res;
 
-    if(_type == NodeType::Softmax && res > maxValue){
-      maxValue = res;
+      switch (_type) {
+      case NodeType::ReLU:
+        if (res < 0) {
+          res = 0;
+          grad = 0;
+        }
+        break;
+      case NodeType::Softmax:
+        if (res > maxValue)
+          maxValue = res;
+        break;
+      default:
+        cout << "Invalid Node type from Constructor" <<endl;
+        break;
+      }
     }
   }
 
   if(_type == NodeType::Softmax) {
 #if OPT_VEC512
     constexpr int V = 16;
-    int O = (OCI + V - 1) / V;
+    int O2 = (OCI + V - 1) / V;
     int Vr = OCI % V ? OCI % V : V;
     __m512 vec_max = _mm512_set1_ps(maxValue);
     __m512 vec_sum = _mm512_setzero_ps();
     __m512 vec_zero = _mm512_setzero_ps();
-    for (int o = 0; o < O; o++) {
-      int Vx = o == O - 1 ? Vr : V;
+    for (int o2 = 0; o2 < O2; o2++) {
+      int Vx = o2 == O2 - 1 ? Vr : V;
       __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
       __m512 vec_val;
       if (std::is_same<T, float>::value) {
-        vec_val = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o * V]);
+        vec_val = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o2 * V]);
       } else { // bfloat16
         __m256i vec256_zero = _mm256_setzero_si256();
-        vec_val = _mm512_mask_load_bf16_as_fp32(vec256_zero, k, &_nodeDataOpt[inputID].values[o * V]);
+        vec_val = _mm512_mask_load_bf16_as_fp32(vec256_zero, k, &_nodeDataOpt[inputID].values[o2 * V]);
       }
       vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
       vec_sum += vec_val;
       if (std::is_same<T, float>::value) {
-        _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o * V], k, vec_val);
+        _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o2 * V], k, vec_val);
       } else {
         __m256i vec256_val = _mm512_cvt_fp32_to_bf16(vec_val);
-        _mm256_mask_storeu_epi16(&_nodeDataOpt[inputID].values[o * V], k, vec256_val);
+        _mm256_mask_storeu_epi16(&_nodeDataOpt[inputID].values[o2 * V], k, vec256_val);
       }
     }
     float sum = _mm512_reduce_add_ps(vec_sum);
