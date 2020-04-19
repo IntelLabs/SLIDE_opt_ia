@@ -17,6 +17,7 @@
 #ifndef BFLOAT16_H
 #define BFLOAT16_H
 
+#include <immintrin.h>
 #include <cmath>
 #include <iostream>  // required for std::ostream o.w. can give compile error
 
@@ -377,4 +378,18 @@ inline bfloat16 operator--(bfloat16& x, int unused) { // postfix decrement
 //     return out;
 // }
 
+inline __m512 _mm512_mask_load_bf16_as_fp32(__m256i pack,
+                                            __mmask16 k, const void *src) {
+  __m512i data = _mm512_cvtepu16_epi32(_mm256_mask_loadu_epi16(pack, k, src));
+  return _mm512_castsi512_ps(_mm512_bslli_epi128(data, 2));
+}
+
+inline __m256i _mm512_cvt_fp32_to_bf16(__m512 src) {
+#if OPT_CPX_BF16
+  __m256i vec256_val = _mm512_cvtneps_pbh(src);
+#else
+  __m256i vec256_val = _mm512_cvtepi32_epi16(_mm512_bsrli_epi128(_mm512_castps_si512(src), 2));
+#endif
+  return vec256_val;
+}
 #endif

@@ -84,9 +84,8 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
         default_random_engine dre(rd());
         normal_distribution<float> distribution(0.0, 0.01);
 
-        generate(_weights, _weights + _noOfNodes * previousLayerNumOfNodes, [&] () { return distribution(dre); });
-        generate(_bias, _bias + _noOfNodes, [&] () { return distribution(dre); });
-
+        generate(_weights, _weights + _noOfNodes * previousLayerNumOfNodes, [&]() { return T(distribution(dre)); });
+        generate(_bias, _bias + _noOfNodes, [&] () { return T(distribution(dre)); });
 
         if (ADAM)
         {
@@ -218,8 +217,8 @@ float Layer<T>::getNomalizationConstant(int inputID)
 template <class T>
 float innerproduct(int* index1, T* value1, int len1, T* value2){
     float total = 0;
-    for (int i=0; i<len1; i++){
-        total+=value1[i]*value2[index1[i]];
+    for (int i = 0; i < len1; i++){
+        total += float(value1[i])* float(value2[index1[i]]);
     }
     return total;
 }
@@ -802,32 +801,42 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
   }
 
   if(_type == NodeType::Softmax) {
-    if (std::is_same<T, float>::value) {
-      constexpr int V = 16;
-      int O = (OCI + V - 1) / V;
-      int Vr = OCI % V ? OCI % V : V;
-      __m512 vec_max = _mm512_set1_ps(maxValue);
-      __m512 vec_sum = _mm512_setzero_ps();
-      __m512 vec_zero = _mm512_setzero_ps();
-      for (int o = 0; o < O; o++) {
-        int Vx = o == O - 1 ? Vr : V;
-        __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
-
-        __m512 vec_val = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o * V]);
-        vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
-        vec_sum += vec_val;
-        _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o * V], k, vec_val);
+#if OPT_VEC512
+    constexpr int V = 16;
+    int O = (OCI + V - 1) / V;
+    int Vr = OCI % V ? OCI % V : V;
+    __m512 vec_max = _mm512_set1_ps(maxValue);
+    __m512 vec_sum = _mm512_setzero_ps();
+    __m512 vec_zero = _mm512_setzero_ps();
+    for (int o = 0; o < O; o++) {
+      int Vx = o == O - 1 ? Vr : V;
+      __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+      __m512 vec_val;
+      if (std::is_same<T, float>::value) {
+        vec_val = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o * V]);
+      } else { // bfloat16
+        __m256i vec256_zero = _mm256_setzero_si256();
+        vec_val = _mm512_mask_load_bf16_as_fp32(vec256_zero, k, &_nodeDataOpt[inputID].values[o * V]);
       }
-      float sum = _mm512_reduce_add_ps(vec_sum);
-      _normalizationConstants[inputID] = sum;
-    } else {
-      for (int oci = 0; oci < OCI; oci++) {
-        float v = _nodeDataOpt[inputID].values[oci];
-        float realActivation = exp(v - maxValue);
-        _nodeDataOpt[inputID].values[oci] = realActivation;
-        _normalizationConstants[inputID] += realActivation;
+      vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
+      vec_sum += vec_val;
+      if (std::is_same<T, float>::value) {
+        _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o * V], k, vec_val);
+      } else {
+        __m256i vec256_val = _mm512_cvt_fp32_to_bf16(vec_val);
+        _mm256_mask_storeu_epi16(&_nodeDataOpt[inputID].values[o * V], k, vec256_val);
       }
     }
+    float sum = _mm512_reduce_add_ps(vec_sum);
+    _normalizationConstants[inputID] = sum;
+#else
+    for (int oci = 0; oci < OCI; oci++) {
+      float v = _nodeDataOpt[inputID].values[oci];
+      float realActivation = exp(v - maxValue);
+      _nodeDataOpt[inputID].values[oci] = realActivation;
+      _normalizationConstants[inputID] += realActivation;
+    }
+#endif
   }
 
   return in;
