@@ -57,7 +57,7 @@ DensifiedWtaHash<T>::DensifiedWtaHash(int numHashes, int noOfBitsToHash)
 
 
 template <class T>
-int * DensifiedWtaHash<T>::getHashEasy(T* data, int dataLen, int topk)
+int * DensifiedWtaHash<T>::getHashEasy(T* data, int dataLen, int topk, int stride)
 {
     // binsize is the number of times the range is larger than the total number of hashes we need.
 
@@ -76,7 +76,7 @@ int * DensifiedWtaHash<T>::getHashEasy(T* data, int dataLen, int topk)
         for (int i = 0; i < dataLen; i++) {
             int inner_index = bin_index + i;
             int binid = _indices[inner_index];
-            T loc_data = data[i];
+            T loc_data = data[i * stride];
             if(binid < _numhashes && values[binid] < loc_data) {
                 values[binid] = loc_data;
                 hashes[binid] = _pos[inner_index];

@@ -414,6 +414,9 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
       Layer<T>* layer = _hiddenlayers[l];
       Layer<T>* prev_layer = _hiddenlayers[l - 1];
       int OCI = layer->_nodeDataOpt[n].size;
+      int OC = layer->_noOfNodes;
+      int IC = layer->_previousLayerNumOfNodes;
+      bool isOIWeights = layer->_weightsOrder == WeightsOrder::OI;
 
       // ComputeExtaStatsForSoftMaxOpt
       if (l == _numberOfLayers - 1) {
@@ -446,14 +449,15 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
           assert(("Input Not Active but still called !! BUG", active));
           for (int ici = 0; ici < dataLayerOpt.lengthByRecordIndex(recordIndex); ici++) {
             int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
-            T *gw = &layer->_weightGrads[layer->_previousLayerNumOfNodes * oc];
+            int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
+            T &gw = layer->_weightGrads[idx];
 
             T grad_t = grad * prevValues[ici];
             T grad_tsq = grad_t * grad_t;
             if (ADAM) {
-              gw[ic] += grad_t;
+              gw += grad_t;
             } else {
-              gw[ic] += tmplr * grad_t;
+              gw += tmplr * grad_t;
             }
           }
           if (ADAM) {
@@ -482,16 +486,17 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
           assert(("Input Not Active but still called !! BUG", active));
           for (int ici = 0; ici < prev_layer->_nodeDataOpt[n].size; ici++) {
             int ic = prev_layer->_nodeDataOpt[n].indices[ici];
-            T *w = &layer->_weights[layer->_previousLayerNumOfNodes * oc];
-            T *gw = &layer->_weightGrads[layer->_previousLayerNumOfNodes * oc];
+            int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
+            T w = layer->_weights[idx];
+            T &gw = layer->_weightGrads[idx];
             if (prevValues[ici] > 0) {
-              prevGrads[ici] += grad * w[ic];
+              prevGrads[ici] += grad * w;
             }
             T grad_t = grad * prevValues[ici];
             if (ADAM) {
-              gw[ic] += grad_t;
+              gw += grad_t;
             } else {
-              gw[ic] += tmplr * grad_t;
+              gw += tmplr * grad_t;
             }
           }
           if (ADAM) {
@@ -536,14 +541,17 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
     Layer<T> *layer = _hiddenlayers[l];
     size_t OC = _hiddenlayers[l]->_noOfNodes;
     size_t IC = _hiddenlayers[l]->_previousLayerNumOfNodes;
+    bool isOIWeights = _hiddenlayers[l]->_weightsOrder == WeightsOrder::OI;
 #pragma omp parallel for
     for (size_t oc = 0; oc < OC; oc++) {
       if (ADAM) {
         for (size_t ic = 0; ic < IC; ic++) {
-          T &gw = layer->_weightGrads[IC * oc + ic];
-          float &mom = layer->_adamAvgMom[IC * oc + ic];
-          float &vel = layer->_adamAvgVel[IC * oc + ic];
-          T &w = layer->_weights[IC * oc + ic];
+          int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
+          T &w = layer->_weights[idx];
+          T &gw = layer->_weightGrads[idx];
+          float &mom = layer->_adamAvgMom[idx];
+          float &vel = layer->_adamAvgVel[idx];
+
           mom = BETA1 * mom + (1 - BETA1) * gw;
           vel = BETA2 * vel + (1 - BETA2) * gw * gw;
           w += ratio * tmplr * mom / (sqrt(vel) + EPS);
@@ -561,15 +569,16 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
       if (tmpRehash) {
         size_t dim = IC;
-        T *local_weights = &layer->_weights[IC * oc];
+        T *local_weights = isOIWeights ? &layer->_weights[IC * oc] : &layer->_weights[oc];
+        int stride = isOIWeights ? 1 : OC;
         int *hashes;
-        if(HashFunction==1) {
+        if(HashFunction==1) { // TODO: stride
           hashes = _hiddenlayers[l]->_wtaHasher->getHash(local_weights);
         }else if (HashFunction==2){
-          hashes = _hiddenlayers[l]->_dwtaHasher->getHashEasy(local_weights, dim, TOPK);
-        }else if (HashFunction==3){
+          hashes = _hiddenlayers[l]->_dwtaHasher->getHashEasy(local_weights, dim, TOPK, stride);
+        }else if (HashFunction==3){ // TODO: stride
           hashes = _hiddenlayers[l]->_MinHasher->getHashEasy(_hiddenlayers[l]->_binids, local_weights, dim, TOPK);
-        }else if (HashFunction==4){
+        }else if (HashFunction==4){ // TODO: stride
           hashes = _hiddenlayers[l]->_srp->getHash(local_weights, dim);
         }
 

@@ -10,6 +10,11 @@
 
 using namespace std;
 
+enum class WeightsOrder {
+  OI = 0,
+  IO = 1
+};
+
 template <class T>
 class Layer
 {
@@ -34,6 +39,7 @@ public:
   T* _biasGrads;
   float* _adamAvgMomBias;
   float* _adamAvgVelBias;
+  WeightsOrder _weightsOrder = WeightsOrder::OI;
 
   struct NodeDataOpt {
     int *indices = nullptr;
@@ -54,7 +60,7 @@ public:
 	Node<T>* getNodebyID(size_t nodeID);
 	Node<T>* getAllNodes();
 	int getNodeCount();
-	void addtoHashTable(T* weights, int length, T bias, int id);
+	void addtoHashTable(T* weights, int length, T bias, int id, int stride = 1);
 	float getNomalizationConstant(int inputID);
 	int queryActiveNodeandComputeActivations(int** activenodesperlayer, T** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
 	int queryActiveNodeandComputeActivationsOpt(int* in_indices, T* in_values, int ICI, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);

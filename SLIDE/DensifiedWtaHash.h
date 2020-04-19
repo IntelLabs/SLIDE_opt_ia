@@ -22,6 +22,6 @@ public:
     DensifiedWtaHash(int numHashes, int noOfBitsToHash);
     int * getHash(int* indices, T* data, int dataLen);
     int getRandDoubleHash(int binid, int count);
-    int * getHashEasy(T* data, int dataLen, int topK);
+    int * getHashEasy(T* data, int dataLen, int topK, int stride = 1);
     ~DensifiedWtaHash();
 };

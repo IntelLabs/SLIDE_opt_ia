@@ -29,6 +29,13 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
     _RangeRow = RangePow;
     _previousLayerNumOfNodes = previousLayerNumOfNodes;
 
+    _weightsOrder = WeightsOrder::OI;
+#if 0 //OPT_IA // TODO: enable IO weights
+    if (_noOfActive == _noOfNodes) {
+      _weightsOrder = WeightsOrder::IO;
+    }
+#endif
+
 // create a list of random nodes just in case not enough nodes from hashtable for active nodes.
     _randNode = new int[_noOfNodes];
     for (size_t n = 0; n < _noOfNodes; n++) {
@@ -114,7 +121,10 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
                 _bias[i], _adamAvgMom+previousLayerNumOfNodes*i , _adamAvgVel+previousLayerNumOfNodes*i, _train_array);
         addtoHashTable(_Nodes[i]._weights, previousLayerNumOfNodes, _Nodes[i]._bias, i);
 #else
-        addtoHashTable(&_weights[previousLayerNumOfNodes * i], previousLayerNumOfNodes, _bias[i], i);
+        if (_weightsOrder == WeightsOrder::OI)
+          addtoHashTable(&_weights[previousLayerNumOfNodes * i], previousLayerNumOfNodes, _bias[i], i);
+        else
+          addtoHashTable(&_weights[i], previousLayerNumOfNodes, _bias[i], i, noOfNodes);
 #endif
     }
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -161,18 +171,18 @@ void Layer<T>::updateRandomNodes()
 
 
 template <class T>
-void Layer<T>::addtoHashTable(T* weights, int length, T bias, int ID)
+void Layer<T>::addtoHashTable(T* weights, int length, T bias, int ID, int stride)
 {
     //LSH logic
     int *hashes;
     if(HashFunction==1) {
-        hashes = _wtaHasher->getHash(weights);
+        hashes = _wtaHasher->getHash(weights); // TODO: IO
     }else if (HashFunction==2) {
-        hashes = _dwtaHasher->getHashEasy(weights, length, TOPK);
+        hashes = _dwtaHasher->getHashEasy(weights, length, TOPK, stride);
     }else if (HashFunction==3) {
-        hashes = _MinHasher->getHashEasy(_binids, weights, length, TOPK);
+        hashes = _MinHasher->getHashEasy(_binids, weights, length, TOPK); // TODO: IO
     }else if (HashFunction==4) {
-        hashes = _srp->getHash(weights, length);
+        hashes = _srp->getHash(weights, length); // TODO: IO
     }
 
     int * hashIndices = _hashTables->hashesToIndex(hashes);
@@ -217,10 +227,10 @@ float Layer<T>::getNomalizationConstant(int inputID)
 
 
 template <class T>
-float innerproduct(int* index1, T* value1, int len1, T* value2){
+float innerproduct(int* index1, T* value1, int len1, T* value2, int stride = 1){
     float total = 0;
     for (int i = 0; i < len1; i++){
-        total += float(value1[i])* float(value2[index1[i]]);
+        total += float(value1[i])* float(value2[index1[i] * stride]);
     }
     return total;
 }
@@ -736,7 +746,11 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
       int what = 0;
 
       for (size_t s = 0; s < _noOfNodes; s++) {
-        float tmp = innerproduct(in_indices, in_values, ICI, &_weights[_previousLayerNumOfNodes * s]);
+        float tmp;
+        if (_weightsOrder == WeightsOrder::OI)
+          tmp = innerproduct(in_indices, in_values, ICI, &_weights[_previousLayerNumOfNodes * s]);
+        else
+          tmp = innerproduct(in_indices, in_values, ICI, &_weights[s], _noOfNodes);
         tmp += _bias[s];
         if (find(label, label + labelsize, s) != label + labelsize) {
           sortW.push_back(make_pair(-1000000000, s));
@@ -760,6 +774,8 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
 
   //***********************************
   float maxValue = 0;
+  int IC = _previousLayerNumOfNodes;
+  int OC = _noOfNodes;
 
   // find activation for all ACTIVE nodes in layer
   for (int oci = 0; oci < OCI; oci++) {
@@ -767,12 +783,19 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
     T &grad = _nodeDataOpt[inputID].grads[oci];
     T &value = _nodeDataOpt[inputID].values[oci];
     int oc = _nodeDataOpt[inputID].indices[oci];
-    T *w = &_weights[oc * _previousLayerNumOfNodes];
 
     if (!active) active = true; // initialize active to false;
     float res = _bias[oc];
-    for (int ici = 0; ici < ICI; ici++) {
-      res += float(w[in_indices[ici]]) * float(in_values[ici]);
+    if (_weightsOrder == WeightsOrder::OI) {
+      for (int ici = 0; ici < ICI; ici++) {
+        int ic = in_indices[ici];
+        res += float(_weights[oc * IC + ic]) * float(in_values[ici]);
+      }
+    } else {
+      for (int ici = 0; ici < ICI; ici++) {
+        int ic = in_indices[ici];
+        res += float(_weights[ic * OC + oc]) * float(in_values[ici]);
+      }
     }
 
     switch (_type) {
