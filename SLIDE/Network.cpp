@@ -430,6 +430,33 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
   bool tmpRehash;
   bool tmpRebuild;
 
+  auto rehashTable = [&](Layer<T> *layer, int IC, int OC, int oc) {
+    bool isOIWeights = layer->_weightsOrder == WeightsOrder::OI;
+    T *local_weights = isOIWeights
+                     ? &layer->_weights[IC * oc]
+                     : &layer->_weights[oc];
+    int stride = isOIWeights ? 1 : OC;
+    int *hashes;
+
+    if(HashFunction==1) { // TODO: stride
+      hashes = layer->_wtaHasher->getHash(local_weights);
+    }else if (HashFunction==2){
+      hashes = layer->_dwtaHasher->getHashEasy(local_weights, IC, TOPK, stride);
+    }else if (HashFunction==3){ // TODO: stride
+      hashes = layer->_MinHasher->getHashEasy(layer->_binids, local_weights, IC, TOPK);
+    }else if (HashFunction==4){ // TODO: stride
+      hashes = layer->_srp->getHash(local_weights, IC);
+    }
+
+    int *hashIndices = layer->_hashTables->hashesToIndex(hashes);
+    int * bucketIndices = layer->_hashTables->add(hashIndices, oc+1);
+
+    delete[] hashes;
+    delete[] hashIndices;
+    delete[] bucketIndices;
+  };
+
+
   for (int l = 0; l < _numberOfLayers; l++) {
     if (rehash && _Sparsity[l] < 1){
       tmpRehash = true;
@@ -452,52 +479,66 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
     size_t OC = _hiddenlayers[l]->_noOfNodes;
     size_t IC = _hiddenlayers[l]->_previousLayerNumOfNodes;
     bool isOIWeights = _hiddenlayers[l]->_weightsOrder == WeightsOrder::OI;
+    if (ADAM) {
+      if (isOIWeights) {
 #pragma omp parallel for
-    for (size_t oc = 0; oc < OC; oc++) {
-      if (ADAM) {
+        for (size_t oc = 0; oc < OC; oc++) {
+          for (size_t ic = 0; ic < IC; ic++) {
+            int idx = IC * oc + ic;
+            T &w = layer->_weights[idx];
+            T &gw = layer->_weightGrads[idx];
+            float &mom = layer->_adamAvgMom[idx];
+            float &vel = layer->_adamAvgVel[idx];
+
+            mom = BETA1 * mom + (1 - BETA1) * gw;
+            vel = BETA2 * vel + (1 - BETA2) * gw * gw;
+            w += ratio * tmplr * mom / (sqrt(vel) + EPS);
+            gw = 0;
+          }
+          T &gb = layer->_biasGrads[oc];
+          T &b = layer->_bias[oc];
+          float &bmom = layer->_adamAvgMomBias[oc];
+          float &bvel = layer->_adamAvgVelBias[oc];
+          bmom = BETA1 * bmom + (1 - BETA1) * gb;
+          bvel = BETA2 * bvel + (1 - BETA2) * gb * gb;
+          b += ratio * tmplr * bmom / (sqrt(bvel) + EPS);
+          gb = 0;
+
+          if (tmpRehash) {
+            rehashTable(layer, IC, OC, oc);
+          }
+        }
+      } else {
+#pragma omp parallel for
         for (size_t ic = 0; ic < IC; ic++) {
-          int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
-          T &w = layer->_weights[idx];
-          T &gw = layer->_weightGrads[idx];
-          float &mom = layer->_adamAvgMom[idx];
-          float &vel = layer->_adamAvgVel[idx];
+          for (size_t oc = 0; oc < OC; oc++) {
+            int idx = ic * OC + oc;
+            T &w = layer->_weights[idx];
+            T &gw = layer->_weightGrads[idx];
+            float &mom = layer->_adamAvgMom[idx];
+            float &vel = layer->_adamAvgVel[idx];
 
-          mom = BETA1 * mom + (1 - BETA1) * gw;
-          vel = BETA2 * vel + (1 - BETA2) * gw * gw;
-          w += ratio * tmplr * mom / (sqrt(vel) + EPS);
-          gw = 0;
+            mom = BETA1 * mom + (1 - BETA1) * gw;
+            vel = BETA2 * vel + (1 - BETA2) * gw * gw;
+            w += ratio * tmplr * mom / (sqrt(vel) + EPS);
+            gw = 0;
+          }
         }
-        T &gb = layer->_biasGrads[oc];
-        T &b = layer->_bias[oc];
-        float &bmom = layer->_adamAvgMomBias[oc];
-        float &bvel = layer->_adamAvgVelBias[oc];
-        bmom = BETA1 * bmom + (1 - BETA1) * gb;
-        bvel = BETA2 * bvel + (1 - BETA2) * gb * gb;
-        b += ratio * tmplr * bmom / (sqrt(bvel) + EPS);
-        gb = 0;
-      }
+#pragma omp parallel for
+        for (size_t oc = 0; oc < OC; oc++) {
+          T &gb = layer->_biasGrads[oc];
+          T &b = layer->_bias[oc];
+          float &bmom = layer->_adamAvgMomBias[oc];
+          float &bvel = layer->_adamAvgVelBias[oc];
+          bmom = BETA1 * bmom + (1 - BETA1) * gb;
+          bvel = BETA2 * bvel + (1 - BETA2) * gb * gb;
+          b += ratio * tmplr * bmom / (sqrt(bvel) + EPS);
+          gb = 0;
 
-      if (tmpRehash) {
-        size_t dim = IC;
-        T *local_weights = isOIWeights ? &layer->_weights[IC * oc] : &layer->_weights[oc];
-        int stride = isOIWeights ? 1 : OC;
-        int *hashes;
-        if(HashFunction==1) { // TODO: stride
-          hashes = _hiddenlayers[l]->_wtaHasher->getHash(local_weights);
-        }else if (HashFunction==2){
-          hashes = _hiddenlayers[l]->_dwtaHasher->getHashEasy(local_weights, dim, TOPK, stride);
-        }else if (HashFunction==3){ // TODO: stride
-          hashes = _hiddenlayers[l]->_MinHasher->getHashEasy(_hiddenlayers[l]->_binids, local_weights, dim, TOPK);
-        }else if (HashFunction==4){ // TODO: stride
-          hashes = _hiddenlayers[l]->_srp->getHash(local_weights, dim);
+          if (tmpRehash) {
+            rehashTable(layer, IC, OC, oc);
+          }
         }
-
-        int *hashIndices = _hiddenlayers[l]->_hashTables->hashesToIndex(hashes);
-        int * bucketIndices = _hiddenlayers[l]->_hashTables->add(hashIndices, oc+1);
-
-        delete[] hashes;
-        delete[] hashIndices;
-        delete[] bucketIndices;
       }
     }
   }

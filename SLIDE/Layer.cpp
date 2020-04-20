@@ -30,7 +30,7 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
     _previousLayerNumOfNodes = previousLayerNumOfNodes;
 
     _weightsOrder = WeightsOrder::OI;
-#if 0 //OPT_IA // TODO: enable IO weights
+#if OPT_IA
     if (_noOfActive == _noOfNodes) {
       _weightsOrder = WeightsOrder::IO;
     }
