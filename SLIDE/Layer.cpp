@@ -925,6 +925,110 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
   return in;
 }
 
+template <class T>
+void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
+                                          int inputID,
+                                          int recordIndex,
+                                          float tmplr) {
+  int OCI = _nodeDataOpt[inputID].size;
+  int OC = _noOfNodes;
+  int IC = _previousLayerNumOfNodes;
+  bool isOIWeights = _weightsOrder == WeightsOrder::OI;
+
+  for (int oci = 0; oci < OCI; oci++) {
+    int oc = _nodeDataOpt[inputID].indices[oci];
+    T &value = _nodeDataOpt[inputID].values[oci];
+    T &grad = _nodeDataOpt[inputID].grads[oci];
+    T *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
+    T &gb = _biasGrads[oc];
+
+    for (int ici = 0; ici < dataLayerOpt.lengthByRecordIndex(recordIndex); ici++) {
+      int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
+      int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
+      T &gw = _weightGrads[idx];
+
+      T grad_t = grad * prevValues[ici];
+      T grad_tsq = grad_t * grad_t;
+      if (ADAM) {
+        gw += grad_t;
+      } else {
+        gw += tmplr * grad_t;
+      }
+    }
+    if (ADAM) {
+      T biasgrad_t = grad;
+      T biasgrad_tsq = biasgrad_t * biasgrad_t;
+      gb += biasgrad_t;
+    } else {
+      gb += tmplr * grad;
+    }
+    grad = 0;
+    value = 0;
+  }
+}
+
+template <class T>
+void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) {
+  int OCI = _nodeDataOpt[inputID].size;
+  int ICI = prev_layer->_nodeDataOpt[inputID].size;
+  int OC = _noOfNodes;
+  int IC = _previousLayerNumOfNodes;
+  bool isOIWeights = _weightsOrder == WeightsOrder::OI;
+  T *prevValues = prev_layer->_nodeDataOpt[inputID].values;
+  T *prevGrads = prev_layer->_nodeDataOpt[inputID].grads;
+
+  for (int oci = 0; oci < OCI; oci++) {
+    int oc = _nodeDataOpt[inputID].indices[oci];
+    T &value = _nodeDataOpt[inputID].values[oci];
+    T &grad = _nodeDataOpt[inputID].grads[oci];
+    T &gb = _biasGrads[oc];
+
+    for (int ici = 0; ici < ICI; ici++) {
+      int ic = prev_layer->_nodeDataOpt[inputID].indices[ici];
+      int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
+      T w = _weights[idx];
+      T &gw = _weightGrads[idx];
+      if (prevValues[ici] > 0) {
+        prevGrads[ici] += grad * w;
+      }
+      T grad_t = grad * prevValues[ici];
+      if (ADAM) {
+        gw += grad_t;
+      } else {
+        gw += tmplr * grad_t;
+      }
+    }
+    if (ADAM) {
+      T biasgrad_t = grad;
+      T biasgrad_tsq = biasgrad_t * biasgrad_t;
+      gb += biasgrad_t;
+    } else {
+      gb += tmplr * grad;
+    }
+    grad = 0;
+    value = 0;
+  }
+}
+
+template <class T>
+void Layer<T>::computeExtraStatsForSoftMaxOpt(int *labels,
+                                              int labelSize,
+                                              int inputID,
+                                              int currentBatchSize) {
+  int OCI = _nodeDataOpt[inputID].size;
+  for (int oci = 0; oci < OCI; oci++) {
+    int oc = _nodeDataOpt[inputID].indices[oci];
+    T &value = _nodeDataOpt[inputID].values[oci];
+    T &grad = _nodeDataOpt[inputID].grads[oci];
+
+    value /= getNomalizationConstant(inputID) + 0.0000001;
+    if (find(labels, labels + labelSize, oc)!= labels + labelSize) {
+      grad = (1.0/labelSize - value) / currentBatchSize;
+    } else {
+      grad = (-value) / currentBatchSize;
+    }
+  }
+}
 
 template <class T>
 void Layer<T>::saveWeights(string file)

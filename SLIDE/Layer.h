@@ -7,6 +7,7 @@
 #include "DensifiedWtaHash.h"
 #include "cnpy.h"
 #include <sys/mman.h>
+#include "DataLayerOpt.h"
 
 using namespace std;
 
@@ -69,6 +70,11 @@ public:
 	void saveWeights(string file);
 	void updateTable();
 	void updateRandomNodes();
+
+  void computeExtraStatsForSoftMaxOpt(int *labels, int labelSize, int inputID, int currentBatchSize);
+  void backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt, int inputID, int recordIndex, float tmplr);
+  void backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr);
+
 
 	~Layer();
 

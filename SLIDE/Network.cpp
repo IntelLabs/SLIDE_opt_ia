@@ -413,96 +413,14 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
     for (int l = _numberOfLayers - 1; l >= 0; l--) {
       Layer<T>* layer = _hiddenlayers[l];
       Layer<T>* prev_layer = _hiddenlayers[l - 1];
-      int OCI = layer->_nodeDataOpt[n].size;
-      int OC = layer->_noOfNodes;
-      int IC = layer->_previousLayerNumOfNodes;
-      bool isOIWeights = layer->_weightsOrder == WeightsOrder::OI;
 
-      // ComputeExtaStatsForSoftMaxOpt
-      if (l == _numberOfLayers - 1) {
-        for (int oci = 0; oci < OCI; oci++) {
-          int oc = layer->_nodeDataOpt[n].indices[oci];
-          T &value = layer->_nodeDataOpt[n].values[oci];
-          T &grad = layer->_nodeDataOpt[n].grads[oci];
-
-          value /= layer->getNomalizationConstant(n) + 0.0000001;
-          if (find(labels, labels + labelSize, oc)!= labels + labelSize) {
-            grad = (1.0/labelSize - value) / _currentBatchSize;
-          } else {
-            grad = (-value) / _currentBatchSize;
-          }
-        }
-      }
-
-      // backPropagateFirstLayerOpt
-      if (l == 0) {
-        for (int oci = 0; oci < OCI; oci++) {
-          int oc = layer->_nodeDataOpt[n].indices[oci];
-          T &value = layer->_nodeDataOpt[n].values[oci];
-          T &grad = layer->_nodeDataOpt[n].grads[oci];
-          T *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
-          T &gb = layer->_biasGrads[oc];
-
-          for (int ici = 0; ici < dataLayerOpt.lengthByRecordIndex(recordIndex); ici++) {
-            int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
-            int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
-            T &gw = layer->_weightGrads[idx];
-
-            T grad_t = grad * prevValues[ici];
-            T grad_tsq = grad_t * grad_t;
-            if (ADAM) {
-              gw += grad_t;
-            } else {
-              gw += tmplr * grad_t;
-            }
-          }
-          if (ADAM) {
-            T biasgrad_t = grad;
-            T biasgrad_tsq = biasgrad_t * biasgrad_t;
-            gb += biasgrad_t;
-          } else {
-            gb += tmplr * grad;
-          }
-          grad = 0;
-          value = 0;
-        }
-      } else {
-        // backPropagateOpt
-        T *prevValues = prev_layer->_nodeDataOpt[n].values;
-        T *prevGrads = prev_layer->_nodeDataOpt[n].grads;
-
-        for (int oci = 0; oci < layer->_nodeDataOpt[n].size; oci++) {
-          int oc = layer->_nodeDataOpt[n].indices[oci];
-          T &value = layer->_nodeDataOpt[n].values[oci];
-          T &grad = layer->_nodeDataOpt[n].grads[oci];
-          T &gb = layer->_biasGrads[oc];
-
-          for (int ici = 0; ici < prev_layer->_nodeDataOpt[n].size; ici++) {
-            int ic = prev_layer->_nodeDataOpt[n].indices[ici];
-            int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
-            T w = layer->_weights[idx];
-            T &gw = layer->_weightGrads[idx];
-            if (prevValues[ici] > 0) {
-              prevGrads[ici] += grad * w;
-            }
-            T grad_t = grad * prevValues[ici];
-            if (ADAM) {
-              gw += grad_t;
-            } else {
-              gw += tmplr * grad_t;
-            }
-          }
-          if (ADAM) {
-            T biasgrad_t = grad;
-            T biasgrad_tsq = biasgrad_t * biasgrad_t;
-            gb += biasgrad_t;
-          } else {
-            gb += tmplr * grad;
-          }
-          grad = 0;
-          value = 0;
-        }
-      }
+      if (l == _numberOfLayers - 1)
+        layer->computeExtraStatsForSoftMaxOpt(labels, labelSize, n,
+                                              _currentBatchSize);
+      if (l == 0)
+        layer->backPropagateFirstLayerOpt(dataLayerOpt, n, recordIndex, tmplr);
+      else 
+        layer->backPropagateOpt(prev_layer, n, tmplr);
     }
   }
 
