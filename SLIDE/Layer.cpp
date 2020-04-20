@@ -822,17 +822,50 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
     }
     if (_type == NodeType::Softmax)
       maxValue = _mm512_reduce_max_ps(vec_max);
+  } else if (_weightsOrder == WeightsOrder::OI && ICI == IC) {
+    int I2 = (ICI + V - 1) / V;
+    int Vr = ICI % V ? ICI % V : V;
+    __m512 vec_max = _mm512_setzero_ps();
+    __m512 vec_zero = _mm512_setzero_ps();
+    // TODO: unroll and save input load
+    for (int oci = 0; oci < OCI; oci++) {
+      //T &grad = _nodeDataOpt[inputID].grads[oci];
+      T &value = _nodeDataOpt[inputID].values[oci];
+      int oc = _nodeDataOpt[inputID].indices[oci];
+
+      __m512 vec_out = _mm512_setzero_ps();
+      float res = _bias[oc];
+      for (int i2 = 0; i2 < I2; i2++) {
+        int Vx = i2 == I2 - 1 ? Vr : V;
+        __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+        __m512 vec_wei, vec_in;
+        if (std::is_same<float, T>::value) {
+          vec_wei = _mm512_maskz_load_ps(k, &_weights[oc * IC + i2 * V]);
+          vec_in = _mm512_maskz_load_ps(k, &in_values[i2 * V]);
+        } else {
+          // TODO: bf16
+        }
+        vec_out += vec_in * vec_wei;
+      }
+      res = _mm512_reduce_add_ps(vec_out);
+      value = res;
+      if (_type == NodeType::ReLU) {
+        if (res < 0) { res = 0; }
+      } else if (_type == NodeType::Softmax) {
+        if (res > maxValue) maxValue = res;
+      }
+    }
   } else
 #endif
   {
     // find activation for all ACTIVE nodes in layer
     for (int oci = 0; oci < OCI; oci++) {
-      bool &active = _nodeDataOpt[inputID].active[oci];
-      T &grad = _nodeDataOpt[inputID].grads[oci];
+      //bool &active = _nodeDataOpt[inputID].active[oci];
+      //T &grad = _nodeDataOpt[inputID].grads[oci];
       T &value = _nodeDataOpt[inputID].values[oci];
       int oc = _nodeDataOpt[inputID].indices[oci];
 
-      if (!active) active = true; // initialize active to false;
+      //if (!active) active = true; // initialize active to false;
       float res = _bias[oc];
       if (_weightsOrder == WeightsOrder::OI) {
         for (int ici = 0; ici < ICI; ici++) {
@@ -846,21 +879,10 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
         }
       }
       value = res;
-
-      switch (_type) {
-      case NodeType::ReLU:
-        if (res < 0) {
-          res = 0;
-          grad = 0;
-        }
-        break;
-      case NodeType::Softmax:
-        if (res > maxValue)
-          maxValue = res;
-        break;
-      default:
-        cout << "Invalid Node type from Constructor" <<endl;
-        break;
+      if (_type == NodeType::ReLU) {
+        if (res < 0) { res = 0; /* grad = 0; */}
+      } else if (_type == NodeType::Softmax) {
+        if (res > maxValue) maxValue = res;
       }
     }
   }
