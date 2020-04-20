@@ -67,7 +67,6 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
       _nodeDataOpt[i].indices = new int[_noOfNodes];
       _nodeDataOpt[i].values = new T[_noOfNodes];
       _nodeDataOpt[i].grads = new T[_noOfNodes];
-      _nodeDataOpt[i].active = new bool[_noOfNodes];
     }
 #endif
 
@@ -829,7 +828,6 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
     __m512 vec_zero = _mm512_setzero_ps();
     // TODO: unroll and save input load
     for (int oci = 0; oci < OCI; oci++) {
-      //T &grad = _nodeDataOpt[inputID].grads[oci];
       T &value = _nodeDataOpt[inputID].values[oci];
       int oc = _nodeDataOpt[inputID].indices[oci];
 
@@ -848,24 +846,21 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
         vec_out += vec_in * vec_wei;
       }
       res = _mm512_reduce_add_ps(vec_out);
-      value = res;
       if (_type == NodeType::ReLU) {
-        if (res < 0) { res = 0; }
+        if (res < 0) res = 0;
       } else if (_type == NodeType::Softmax) {
         if (res > maxValue) maxValue = res;
       }
+      value = res;
     }
   } else
 #endif
   {
     // find activation for all ACTIVE nodes in layer
     for (int oci = 0; oci < OCI; oci++) {
-      //bool &active = _nodeDataOpt[inputID].active[oci];
-      //T &grad = _nodeDataOpt[inputID].grads[oci];
       T &value = _nodeDataOpt[inputID].values[oci];
       int oc = _nodeDataOpt[inputID].indices[oci];
 
-      //if (!active) active = true; // initialize active to false;
       float res = _bias[oc];
       if (_weightsOrder == WeightsOrder::OI) {
         for (int ici = 0; ici < ICI; ici++) {
@@ -878,12 +873,12 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
           res += float(_weights[ic * OC + oc]) * float(in_values[ici]);
         }
       }
-      value = res;
       if (_type == NodeType::ReLU) {
-        if (res < 0) { res = 0; /* grad = 0; */}
+        if (res < 0) res = 0;
       } else if (_type == NodeType::Softmax) {
         if (res > maxValue) maxValue = res;
       }
+      value = res;
     }
   }
 
@@ -969,7 +964,6 @@ Layer<T>::~Layer()
       delete[] _nodeDataOpt[i].values;
       delete[] _nodeDataOpt[i].indices;
       delete[] _nodeDataOpt[i].grads;
-      delete[] _nodeDataOpt[i].active;
     }
     delete[] _nodeDataOpt;
     delete[] _adamAvgMomBias;

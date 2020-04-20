@@ -422,11 +422,9 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
       if (l == _numberOfLayers - 1) {
         for (int oci = 0; oci < OCI; oci++) {
           int oc = layer->_nodeDataOpt[n].indices[oci];
-          bool &active = layer->_nodeDataOpt[n].active[oci];
           T &value = layer->_nodeDataOpt[n].values[oci];
           T &grad = layer->_nodeDataOpt[n].grads[oci];
 
-          assert(("Input Not Active but still called !! BUG", active));
           value /= layer->getNomalizationConstant(n) + 0.0000001;
           if (find(labels, labels + labelSize, oc)!= labels + labelSize) {
             grad = (1.0/labelSize - value) / _currentBatchSize;
@@ -440,13 +438,11 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
       if (l == 0) {
         for (int oci = 0; oci < OCI; oci++) {
           int oc = layer->_nodeDataOpt[n].indices[oci];
-          bool &active = layer->_nodeDataOpt[n].active[oci];
           T &value = layer->_nodeDataOpt[n].values[oci];
           T &grad = layer->_nodeDataOpt[n].grads[oci];
           T *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
           T &gb = layer->_biasGrads[oc];
 
-          assert(("Input Not Active but still called !! BUG", active));
           for (int ici = 0; ici < dataLayerOpt.lengthByRecordIndex(recordIndex); ici++) {
             int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
             int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
@@ -467,7 +463,6 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
           } else {
             gb += tmplr * grad;
           }
-          active = false;
           grad = 0;
           value = 0;
         }
@@ -478,12 +473,10 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
         for (int oci = 0; oci < layer->_nodeDataOpt[n].size; oci++) {
           int oc = layer->_nodeDataOpt[n].indices[oci];
-          bool &active = layer->_nodeDataOpt[n].active[oci];
           T &value = layer->_nodeDataOpt[n].values[oci];
           T &grad = layer->_nodeDataOpt[n].grads[oci];
           T &gb = layer->_biasGrads[oc];
 
-          assert(("Input Not Active but still called !! BUG", active));
           for (int ici = 0; ici < prev_layer->_nodeDataOpt[n].size; ici++) {
             int ic = prev_layer->_nodeDataOpt[n].indices[ici];
             int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
@@ -506,7 +499,6 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
           } else {
             gb += tmplr * grad;
           }
-          active = false;
           grad = 0;
           value = 0;
         }

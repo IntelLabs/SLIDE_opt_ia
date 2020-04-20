@@ -45,7 +45,6 @@ public:
     int *indices = nullptr;
     T *values = nullptr;
     T *grads = nullptr;
-    bool *active = nullptr;
     int size = 0;
   };
   NodeDataOpt *_nodeDataOpt; // per each record
