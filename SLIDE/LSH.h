@@ -17,6 +17,7 @@ public:
 	int* add(int *indices, int id);
 	int add(int indices, int tableId, int id);
 	int * hashesToIndex(int * hashes);
+  void hashesToIndexAddOpt(int * hashes, int id);
 	int** retrieveRaw(int *indices);
 	int retrieve(int table, int indices, int bucket);
 	void count();

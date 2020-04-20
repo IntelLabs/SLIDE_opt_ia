@@ -448,12 +448,8 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
       hashes = layer->_srp->getHash(local_weights, IC);
     }
 
-    int *hashIndices = layer->_hashTables->hashesToIndex(hashes);
-    int * bucketIndices = layer->_hashTables->add(hashIndices, oc+1);
-
+    layer->_hashTables->hashesToIndexAddOpt(hashes, oc + 1);
     delete[] hashes;
-    delete[] hashIndices;
-    delete[] bucketIndices;
   };
 
 

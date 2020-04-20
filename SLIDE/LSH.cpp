@@ -108,6 +108,31 @@ int* LSH::add(int *indices, int id)
 	return secondIndices;
 }
 
+void LSH::hashesToIndexAddOpt(int * hashes, int id) {
+  for (int i = 0; i < _L; i++) {
+    unsigned int index = 0;
+
+    for (int j = 0; j < _K; j++) {
+      if (HashFunction==4){
+        unsigned int h = hashes[_K*i + j];
+        index += h<<(_K-1-j);
+      } else if (HashFunction==1 | HashFunction==2){
+        unsigned int h = hashes[_K*i + j];
+        index += h<<((_K-1-j)*(int)floor(log(binsize)));
+      } else {
+        unsigned int h = rand1[_K*i + j];
+        h *= rand1[_K * i + j];
+        h ^= h >> 13;
+        h ^= rand1[_K * i + j];
+        index += h * hashes[_K * i + j];
+      }
+    }
+    if (HashFunction==3) {
+      index = index&((1<<_RangePow)-1);
+    }
+    _bucket[i][index].add(id);
+  }
+}
 
 int LSH::add(int tableId, int indices, int id)
 {
