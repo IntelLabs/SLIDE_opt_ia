@@ -184,16 +184,16 @@ void Layer<T>::addtoHashTable(T* weights, int length, T bias, int ID, int stride
         hashes = _srp->getHash(weights, length); // TODO: IO
     }
 
+#if !OPT_IA
     int * hashIndices = _hashTables->hashesToIndex(hashes);
     int * bucketIndices = _hashTables->add(hashIndices, ID+1);
-
-#if !OPT_IA
     _Nodes[ID]._indicesInTables = hashIndices;
     _Nodes[ID]._indicesInBuckets = bucketIndices;
+#else
+    _hashTables->hashesToIndexAddOpt(hashes, ID + 1);
 #endif
 
     delete [] hashes;
-
 }
 
 

@@ -429,30 +429,6 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
   bool tmpRehash;
   bool tmpRebuild;
-
-  auto rehashTable = [&](Layer<T> *layer, int IC, int OC, int oc) {
-    bool isOIWeights = layer->_weightsOrder == WeightsOrder::OI;
-    T *local_weights = isOIWeights
-                     ? &layer->_weights[IC * oc]
-                     : &layer->_weights[oc];
-    int stride = isOIWeights ? 1 : OC;
-    int *hashes;
-
-    if(HashFunction==1) { // TODO: stride
-      hashes = layer->_wtaHasher->getHash(local_weights);
-    }else if (HashFunction==2){
-      hashes = layer->_dwtaHasher->getHashEasy(local_weights, IC, TOPK, stride);
-    }else if (HashFunction==3){ // TODO: stride
-      hashes = layer->_MinHasher->getHashEasy(layer->_binids, local_weights, IC, TOPK);
-    }else if (HashFunction==4){ // TODO: stride
-      hashes = layer->_srp->getHash(local_weights, IC);
-    }
-
-    layer->_hashTables->hashesToIndexAddOpt(hashes, oc + 1);
-    delete[] hashes;
-  };
-
-
   for (int l = 0; l < _numberOfLayers; l++) {
     if (rehash && _Sparsity[l] < 1){
       tmpRehash = true;
@@ -501,7 +477,7 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
           gb = 0;
 
           if (tmpRehash) {
-            rehashTable(layer, IC, OC, oc);
+            layer->addtoHashTable(&layer->_weights[IC * oc], IC, 0, oc, 1);
           }
         }
       } else {
@@ -532,7 +508,7 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
           gb = 0;
 
           if (tmpRehash) {
-            rehashTable(layer, IC, OC, oc);
+            layer->addtoHashTable(&layer->_weights[oc], IC, 0, oc, OC);
           }
         }
       }
