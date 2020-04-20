@@ -1016,6 +1016,39 @@ void Layer<T>::computeExtraStatsForSoftMaxOpt(int *labels,
                                               int inputID,
                                               int currentBatchSize) {
   int OCI = _nodeDataOpt[inputID].size;
+#if OPT_VEC512
+  constexpr int V = 16;
+  int O2 = (OCI + V - 1) / V;
+  int Vr = OCI % V ? OCI % V : V;
+  __m512 vec_batchsize = _mm512_set1_ps(-currentBatchSize);
+  __m512 vec_bias = _mm512_set1_ps(1.0f / labelSize/currentBatchSize);
+  __m512 vec_rnorm = _mm512_set1_ps(1.0f / (getNomalizationConstant(inputID) + 0.0000001));
+  for (int o2 = 0; o2 < O2; o2++) {
+    int Vx = o2 == O2 - 1 ? Vr : V;
+    __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+    __m512i vec_oc = _mm512_maskz_load_epi32(k, &_nodeDataOpt[inputID].indices[o2 * V]);
+    __m512 vec_value, vec_grad;
+    if (std::is_same<float, T>::value) {
+      vec_value = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o2 * V]);
+    } else {
+      // TODO: bf16
+    }
+    vec_value *= vec_rnorm;
+    vec_grad = vec_value / vec_batchsize;
+    __mmask16 mask = _mm512_int2mask(0);
+    for (int i = 0; i < labelSize; i++) {
+      __m512i vec_label = _mm512_set1_epi32(labels[i]);
+      __mmask16 tmp = _mm512_mask_cmp_epi32_mask(k, vec_oc, vec_label, _MM_CMPINT_EQ);
+      mask = _mm512_kor(mask, tmp);
+    }
+    vec_grad = _mm512_mask_add_ps(vec_grad, mask, vec_grad, vec_bias);
+    if (std::is_same<float, T>::value) {
+      _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].grads[o2 * V], k, vec_grad);
+    } else {
+      // TODO: bf16
+    }
+  }
+#else
   for (int oci = 0; oci < OCI; oci++) {
     int oc = _nodeDataOpt[inputID].indices[oci];
     T &value = _nodeDataOpt[inputID].values[oci];
@@ -1028,6 +1061,7 @@ void Layer<T>::computeExtraStatsForSoftMaxOpt(int *labels,
       grad = (-value) / currentBatchSize;
     }
   }
+#endif
 }
 
 template <class T>
