@@ -965,9 +965,8 @@ void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
           vec_gb += vec_gy;
         if (std::is_same<float, T>::value) {
           _mm512_mask_storeu_ps(&_weightGrads[ic * OC + o2 * V], k, vec_gw);
-          if (ici == ICI - 1) {
+          if (ici == 0) {
             _mm512_mask_storeu_ps(&_biasGrads[o2 * V], k, vec_gb);
-            _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].grads[o2 * V], k, vec_zero);
           }
         } else {
           // TODO: bf16
@@ -979,7 +978,6 @@ void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
   {
     for (int oci = 0; oci < OCI; oci++) {
       int oc = _nodeDataOpt[inputID].indices[oci];
-      T &value = _nodeDataOpt[inputID].values[oci];
       T &grad = _nodeDataOpt[inputID].grads[oci];
       T *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
       T &gb = _biasGrads[oc];
@@ -990,7 +988,6 @@ void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
         T &gw = _weightGrads[idx];
 
         T grad_t = grad * prevValues[ici];
-        T grad_tsq = grad_t * grad_t;
         if (ADAM) {
           gw += grad_t;
         } else {
@@ -999,13 +996,10 @@ void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
       }
       if (ADAM) {
         T biasgrad_t = grad;
-        T biasgrad_tsq = biasgrad_t * biasgrad_t;
         gb += biasgrad_t;
       } else {
         gb += tmplr * grad;
       }
-      grad = 0;
-      value = 0;
     }
   }
 }
@@ -1022,7 +1016,6 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
 
   for (int oci = 0; oci < OCI; oci++) {
     int oc = _nodeDataOpt[inputID].indices[oci];
-    T &value = _nodeDataOpt[inputID].values[oci];
     T &grad = _nodeDataOpt[inputID].grads[oci];
     T &gb = _biasGrads[oc];
 
@@ -1032,7 +1025,10 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
       T w = _weights[idx];
       T &gw = _weightGrads[idx];
       if (prevValues[ici] > 0) {
-        prevGrads[ici] += grad * w;
+        if (oci == 0)
+          prevGrads[ici] = grad * w;
+        else
+          prevGrads[ici] += grad * w;
       }
       T grad_t = grad * prevValues[ici];
       if (ADAM) {
@@ -1043,13 +1039,10 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
     }
     if (ADAM) {
       T biasgrad_t = grad;
-      T biasgrad_tsq = biasgrad_t * biasgrad_t;
       gb += biasgrad_t;
     } else {
       gb += tmplr * grad;
     }
-    grad = 0;
-    value = 0;
   }
 }
 
