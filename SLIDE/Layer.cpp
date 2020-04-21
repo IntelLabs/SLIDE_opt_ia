@@ -931,39 +931,82 @@ void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
                                           int recordIndex,
                                           float tmplr) {
   int OCI = _nodeDataOpt[inputID].size;
+  int ICI = dataLayerOpt.lengthByRecordIndex(recordIndex);
   int OC = _noOfNodes;
   int IC = _previousLayerNumOfNodes;
   bool isOIWeights = _weightsOrder == WeightsOrder::OI;
 
-  for (int oci = 0; oci < OCI; oci++) {
-    int oc = _nodeDataOpt[inputID].indices[oci];
-    T &value = _nodeDataOpt[inputID].values[oci];
-    T &grad = _nodeDataOpt[inputID].grads[oci];
+#if OPT_VEC512
+  if (!isOIWeights && ADAM) {
+    constexpr int V = 16;
+    int O2 = (OCI + V - 1) / V;
+    int Vr = OCI % V ? OCI % V : V;
+    int *prevIndices = dataLayerOpt.indicesByRecordIndex(recordIndex);
     T *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
-    T &gb = _biasGrads[oc];
-
-    for (int ici = 0; ici < dataLayerOpt.lengthByRecordIndex(recordIndex); ici++) {
-      int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
-      int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
-      T &gw = _weightGrads[idx];
-
-      T grad_t = grad * prevValues[ici];
-      T grad_tsq = grad_t * grad_t;
-      if (ADAM) {
-        gw += grad_t;
-      } else {
-        gw += tmplr * grad_t;
+    __m512 vec_zero = _mm512_setzero_ps();
+    for (int ici = 0; ici < ICI; ici++) {
+      int ic = prevIndices[ici];
+      float x = prevValues[ici];
+      __m512 vec_x = _mm512_set1_ps(x);
+      for (int o2 = 0; o2 < O2; o2++) {
+        int Vx = o2 == O2 - 1 ? Vr : V;
+        __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+        __m512 vec_gy, vec_gw, vec_gb;
+        if (std::is_same<float, T>::value) {
+          vec_gy = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].grads[o2 * V]);
+          vec_gw = _mm512_maskz_load_ps(k, &_weightGrads[ic * OC + o2 * V]);
+          if (ici == ICI - 1)
+            vec_gb = _mm512_maskz_load_ps(k, &_biasGrads[o2 * V]);
+        } else {
+          // TODO: bf16
+        }
+        vec_gw += vec_gy * vec_x;
+        if (ici == 0)
+          vec_gb += vec_gy;
+        if (std::is_same<float, T>::value) {
+          _mm512_mask_storeu_ps(&_weightGrads[ic * OC + o2 * V], k, vec_gw);
+          if (ici == ICI - 1) {
+            _mm512_mask_storeu_ps(&_biasGrads[o2 * V], k, vec_gb);
+            _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].grads[o2 * V], k, vec_zero);
+          }
+        } else {
+          // TODO: bf16
+        }
       }
     }
-    if (ADAM) {
-      T biasgrad_t = grad;
-      T biasgrad_tsq = biasgrad_t * biasgrad_t;
-      gb += biasgrad_t;
-    } else {
-      gb += tmplr * grad;
+  } else
+#endif
+  {
+    for (int oci = 0; oci < OCI; oci++) {
+      int oc = _nodeDataOpt[inputID].indices[oci];
+      T &value = _nodeDataOpt[inputID].values[oci];
+      T &grad = _nodeDataOpt[inputID].grads[oci];
+      T *prevValues = dataLayerOpt.valuesByRecordIndex(recordIndex);
+      T &gb = _biasGrads[oc];
+
+      for (int ici = 0; ici < ICI; ici++) {
+        int ic = dataLayerOpt.indicesByRecordIndex(recordIndex)[ici];
+        int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
+        T &gw = _weightGrads[idx];
+
+        T grad_t = grad * prevValues[ici];
+        T grad_tsq = grad_t * grad_t;
+        if (ADAM) {
+          gw += grad_t;
+        } else {
+          gw += tmplr * grad_t;
+        }
+      }
+      if (ADAM) {
+        T biasgrad_t = grad;
+        T biasgrad_tsq = biasgrad_t * biasgrad_t;
+        gb += biasgrad_t;
+      } else {
+        gb += tmplr * grad;
+      }
+      grad = 0;
+      value = 0;
     }
-    grad = 0;
-    value = 0;
   }
 }
 
