@@ -1014,34 +1014,87 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
   T *prevValues = prev_layer->_nodeDataOpt[inputID].values;
   T *prevGrads = prev_layer->_nodeDataOpt[inputID].grads;
 
-  for (int oci = 0; oci < OCI; oci++) {
-    int oc = _nodeDataOpt[inputID].indices[oci];
-    T &grad = _nodeDataOpt[inputID].grads[oci];
-    T &gb = _biasGrads[oc];
+#if OPT_VEC512
+  constexpr int V = 16;
+  int I2 = (ICI + V - 1) / V;
+  int Vr = ICI % V ? ICI % V : V;
 
-    for (int ici = 0; ici < ICI; ici++) {
-      int ic = prev_layer->_nodeDataOpt[inputID].indices[ici];
-      int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
-      T w = _weights[idx];
-      T &gw = _weightGrads[idx];
-      if (prevValues[ici] > 0) {
-        if (oci == 0)
-          prevGrads[ici] = grad * w;
-        else
-          prevGrads[ici] += grad * w;
-      }
-      T grad_t = grad * prevValues[ici];
-      if (ADAM) {
-        gw += grad_t;
-      } else {
-        gw += tmplr * grad_t;
+  if (isOIWeights && ICI == IC && ADAM) {
+    for (int oci = 0; oci < OCI; oci++) {
+      int oc = _nodeDataOpt[inputID].indices[oci];
+      float gy = _nodeDataOpt[inputID].grads[oci];
+      float gb = _biasGrads[oc];
+      gb += gy;
+      _biasGrads[oc] = gb;
+
+      for (int i2 = 0; i2 < I2; i2++) {
+        int Vx = i2 == I2 - 1 ? Vr : V;
+        __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
+        __m512 vec_gx = _mm512_setzero_ps();
+        __m512 vec_zero = _mm512_setzero_ps();
+        __m512 vec_x;
+        if (std::is_same<float, T>::value) {
+          vec_x = _mm512_maskz_load_ps(k, &prevValues[i2 * V]);
+          if (oci > 0) {
+            vec_gx = _mm512_maskz_load_ps(k, &prevGrads[i2 * V]);
+          }
+        } else {
+          // TODO: bf16
+        }
+        __mmask16 mask = _mm512_mask_cmp_ps_mask(k, vec_zero, vec_x, _MM_CMPINT_LT);
+
+        int idx = IC * oc + i2 * V;
+        __m512 vec_gy = _mm512_set1_ps(gy);
+        __m512 vec_w, vec_gw;
+        if (std::is_same<float, T>::value) {
+          vec_w = _mm512_maskz_load_ps(k, &_weights[idx]);
+          vec_gw = _mm512_maskz_load_ps(k, &_weightGrads[idx]);
+        } else {
+          // TODO: bf16
+        }
+        vec_gx = _mm512_mask3_fmadd_ps(vec_gy, vec_w, vec_gx, mask);
+        //vec_gx += vec_gy * vec_w; // gx = gy * w
+        vec_gw += vec_gy * vec_x; // gw = gy * x
+        if (std::is_same<float, T>::value) {
+          _mm512_mask_storeu_ps(&_weightGrads[idx], k, vec_gw);
+          _mm512_mask_storeu_ps(&prevGrads[i2 * V], k, vec_gx);
+        } else {
+          // TODO: bf16
+        }
+
       }
     }
-    if (ADAM) {
-      T biasgrad_t = grad;
-      gb += biasgrad_t;
-    } else {
-      gb += tmplr * grad;
+  } else
+#endif
+  {
+    for (int oci = 0; oci < OCI; oci++) {
+      int oc = _nodeDataOpt[inputID].indices[oci];
+      T &grad = _nodeDataOpt[inputID].grads[oci];
+      T &gb = _biasGrads[oc];
+
+      for (int ici = 0; ici < ICI; ici++) {
+        int ic = prev_layer->_nodeDataOpt[inputID].indices[ici];
+        int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
+        T w = _weights[idx];
+        T &gw = _weightGrads[idx];
+        if (oci == 0)
+          prevGrads[ici] = 0;
+        if (prevValues[ici] > 0) {
+          prevGrads[ici] += grad * w;
+        }
+        T grad_t = grad * prevValues[ici];
+        if (ADAM) {
+          gw += grad_t;
+        } else {
+          gw += tmplr * grad_t;
+        }
+      }
+      if (ADAM) {
+        T biasgrad_t = grad;
+        gb += biasgrad_t;
+      } else {
+        gb += tmplr * grad;
+      }
     }
   }
 }
