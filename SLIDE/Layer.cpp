@@ -1033,53 +1033,69 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
   T *prevGrads = prev_layer->_nodeDataOpt[inputID].grads;
 
 #if OPT_VEC512
-  constexpr int V = 16;
-  int I2 = (ICI + V - 1) / V;
-  int Vr = ICI % V ? ICI % V : V;
-
   if (isOIWeights && ICI == IC && ADAM) {
-    for (int oci = 0; oci < OCI; oci++) {
-      int oc = _nodeDataOpt[inputID].indices[oci];
-      float gy = _nodeDataOpt[inputID].grads[oci];
-      float gb = _biasGrads[oc];
-      gb += gy;
-      _biasGrads[oc] = gb;
+    constexpr int V = 16;
+    constexpr int I = 8;
+    int ic2 = (ICI + V - 1) / V;
+    int I2 = ic2 / I;
+    // TODO: tailing handling
+    // int Ir = ic2 % I;
+    //int Vr = ICI % V ? ICI % V : V;
 
-      for (int i2 = 0; i2 < I2; i2++) {
-        int Vx = i2 == I2 - 1 ? Vr : V;
-        __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
-        __m512 vec_gx = _mm512_setzero_ps();
-        __m512 vec_zero = _mm512_setzero_ps();
-        __m512 vec_x;
+    __m512 vec_zero = _mm512_setzero_ps();
+    for (int i2 = 0; i2 < I2; i2++) {
+      __mmask16 mask[I];
+      __m512 vec_x[I], vec_gx[I], vec_w[I], vec_gw;
+      #pragma unroll(I)
+      for (int i = 0; i < I; i++) {
+        vec_gx[i] = _mm512_setzero_ps();
         if (std::is_same<float, T>::value) {
-          vec_x = _mm512_maskz_load_ps(k, &prevValues[i2 * V]);
-          if (oci > 0) {
-            vec_gx = _mm512_maskz_load_ps(k, &prevGrads[i2 * V]);
-          }
+          vec_x[i] = _mm512_load_ps(&prevValues[i2 * I * V + i * V]);
         } else {
           // TODO: bf16
         }
-        __mmask16 mask = _mm512_mask_cmp_ps_mask(k, vec_zero, vec_x, _MM_CMPINT_LT);
+        mask[i] = _mm512_cmp_ps_mask(vec_zero, vec_x[i], _MM_CMPINT_LT);
+      }
 
-        int idx = IC * oc + i2 * V;
+      for (int oci = 0; oci < OCI; oci++) {
+        int oc = _nodeDataOpt[inputID].indices[oci];
+        float gy = _nodeDataOpt[inputID].grads[oci];
+        if (i2 == 0) {
+          float gb = _biasGrads[oc];
+          gb += gy;
+          _biasGrads[oc] = gb;
+        }
+
         __m512 vec_gy = _mm512_set1_ps(gy);
-        __m512 vec_w, vec_gw;
+        #pragma unroll(I)
+        for (int i = 0; i < I; i++) {
+          int idx = IC * oc + i2 * I * V + i * V;
+          if (std::is_same<float, T>::value) {
+            vec_w[i] = _mm512_load_ps(&_weights[idx]);
+            vec_gw = _mm512_load_ps(&_weightGrads[idx]);
+          } else {
+            // TODO: bf16
+          }
+          vec_gw += vec_gy * vec_x[i]; // gw = gy * x
+          if (std::is_same<float, T>::value) {
+            _mm512_storeu_ps(&_weightGrads[idx], vec_gw);
+          } else {
+            // TODO: bf16
+          }
+        }
+        #pragma unroll(I)
+        for (int i = 0; i < I; i++) {
+          int idx = IC * oc + i2 * I * V + i * V;
+          vec_gx[i] = _mm512_mask3_fmadd_ps(vec_gy, vec_w[i], vec_gx[i], mask[i]);
+        }
+      }
+      #pragma unroll(I)
+      for (int i = 0; i < I; i++) {
         if (std::is_same<float, T>::value) {
-          vec_w = _mm512_maskz_load_ps(k, &_weights[idx]);
-          vec_gw = _mm512_maskz_load_ps(k, &_weightGrads[idx]);
+          _mm512_store_ps(&prevGrads[i2 * I * V + i * V], vec_gx[i]);
         } else {
           // TODO: bf16
         }
-        vec_gx = _mm512_mask3_fmadd_ps(vec_gy, vec_w, vec_gx, mask);
-        //vec_gx += vec_gy * vec_w; // gx = gy * w
-        vec_gw += vec_gy * vec_x; // gw = gy * x
-        if (std::is_same<float, T>::value) {
-          _mm512_mask_storeu_ps(&_weightGrads[idx], k, vec_gw);
-          _mm512_mask_storeu_ps(&prevGrads[i2 * V], k, vec_gx);
-        } else {
-          // TODO: bf16
-        }
-
       }
     }
   } else
