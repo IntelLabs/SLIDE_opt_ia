@@ -955,7 +955,7 @@ void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
         if (std::is_same<float, T>::value) {
           vec_gy = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].grads[o2 * V]);
           vec_gw = _mm512_maskz_load_ps(k, &_weightGrads[ic * OC + o2 * V]);
-          if (ici == ICI - 1)
+          if (ici == 0)
             vec_gb = _mm512_maskz_load_ps(k, &_biasGrads[o2 * V]);
         } else {
           // TODO: bf16
