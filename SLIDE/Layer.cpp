@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <climits>
+#include <stdlib.h>
 #include "Config.h"
 #include <bitset>
 #include <fstream>
@@ -64,9 +65,9 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
     _nodeDataOpt = new NodeDataOpt[_batchsize];
     for (int i = 0; i < _batchsize; i++) {
       _nodeDataOpt[i].size = _noOfNodes; // assume dense
-      _nodeDataOpt[i].indices = new int[_noOfNodes];
-      _nodeDataOpt[i].values = new T[_noOfNodes];
-      _nodeDataOpt[i].grads = new T[_noOfNodes];
+      _nodeDataOpt[i].indices = (int *)aligned_alloc(64, sizeof(int) * _noOfNodes);
+      _nodeDataOpt[i].values = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
+      _nodeDataOpt[i].grads = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
     }
 #endif
 
@@ -80,11 +81,11 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
         }
 
     }else{
-        _weights = new T[_noOfNodes * previousLayerNumOfNodes]();
-        _bias = new T[_noOfNodes];
+        _weights = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes * previousLayerNumOfNodes);
+        _bias = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
 #if OPT_IA
-        _weightGrads = new T[_noOfNodes * previousLayerNumOfNodes]();
-        _biasGrads = new T[_noOfNodes];
+        _weightGrads =  (T *)aligned_alloc(64, sizeof(T) * _noOfNodes * previousLayerNumOfNodes);
+        _biasGrads = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
 #endif
         random_device rd;
         default_random_engine dre(rd());
@@ -95,12 +96,12 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
 
         if (ADAM)
         {
-            _adamAvgMom = new float[_noOfNodes * previousLayerNumOfNodes]();
-            _adamAvgVel = new float[_noOfNodes * previousLayerNumOfNodes]();
+            _adamAvgMom = (float *)aligned_alloc(64, sizeof(float) * _noOfNodes * previousLayerNumOfNodes);
+            _adamAvgVel = (float *)aligned_alloc(64, sizeof(float) * _noOfNodes * previousLayerNumOfNodes);
 
 #if OPT_IA
-            _adamAvgMomBias = new float[_noOfNodes]();
-            _adamAvgVelBias = new float[_noOfNodes]();
+            _adamAvgMomBias = (float *)aligned_alloc(64, sizeof(float) * _noOfNodes);
+            _adamAvgVelBias = (float *)aligned_alloc(64, sizeof(float) * _noOfNodes);
 #endif
         }
     }
@@ -1188,21 +1189,21 @@ Layer<T>::~Layer()
 
 #if OPT_IA
     for (int i = 0; i < _batchsize; i++) {
-      delete[] _nodeDataOpt[i].values;
-      delete[] _nodeDataOpt[i].indices;
-      delete[] _nodeDataOpt[i].grads;
+      free(_nodeDataOpt[i].values);
+      free(_nodeDataOpt[i].indices);
+      free(_nodeDataOpt[i].grads);
     }
+    free(_adamAvgMomBias);
+    free(_adamAvgVelBias);
+    free(_weightGrads);
+    free(_biasGrads);
     delete[] _nodeDataOpt;
-    delete[] _adamAvgMomBias;
-    delete[] _adamAvgVelBias;
-    delete[] _weightGrads;
-    delete[] _biasGrads;
 #endif
 
-    delete[] _adamAvgMom;
-    delete[] _adamAvgVel;
-    delete[] _weights;
-    delete[] _bias;
+    free(_adamAvgMom);
+    free(_adamAvgVel);
+    free(_weights);
+    free(_bias);
 
     delete _wtaHasher;
     delete _dwtaHasher;
