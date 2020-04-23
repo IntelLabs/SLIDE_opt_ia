@@ -779,45 +779,62 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
 
 #if OPT_VEC512
   constexpr int V = 16;
+  constexpr int O = 8;
   if (_weightsOrder == WeightsOrder::IO && OC == OCI) {
-    int O2 = (OCI + V - 1) / V;
-    int Vr = OCI % V ? OCI % V : V;
+    int oc2 = (OCI + V - 1) / V;
+    int O2 = oc2 / O;
+    // TODO: tailing handling
+    // int Or = oc2 % O;
+    // int Vr = OCI % V ? OCI % V : V;
     __m512 vec_max = _mm512_setzero_ps();
     __m512 vec_zero = _mm512_setzero_ps();
     for (int o2 = 0; o2 < O2; o2++) {
-      int Vx = o2 == O2 - 1 ? Vr : V;
-      __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
-      __m512 vec_out;
-      if (std::is_same<float, T>::value) {
-        vec_out = _mm512_maskz_load_ps(k, &_bias[o2 * V]);
-      } else {
-        // TODO: bf16
-      }
-      for (int ici = 0; ici < ICI; ici++) {
-        int ic = in_indices[ici];
-        __m512 vec_wei;
+      __m512 vec_out[O], vec_wei[O];
+      #pragma unroll(O)
+      for (int o = 0; o < O; o++) {
         if (std::is_same<float, T>::value) {
-          vec_wei = _mm512_maskz_load_ps(k, &_weights[ic * OC + o2 * V]);
+          vec_out[o] = _mm512_load_ps(&_bias[o2 * O * V + o * V]);
         } else {
           // TODO: bf16
         }
+      }
+
+      for (int ici = 0; ici < ICI; ici++) {
+        int ic = in_indices[ici];
+        #pragma unroll(O)
+        for (int o = 0; o < O; o++) {
+          if (std::is_same<float, T>::value) {
+            vec_wei[o] = _mm512_load_ps(&_weights[ic * OC + o2 * O * V + o * V]);
+          } else {
+            // TODO: bf16
+          }
+        }
         float in = in_values[ici];
         __m512 vec_in = _mm512_set1_ps(in);
-        vec_out += vec_in * vec_wei;
+        #pragma unroll(O)
+        for (int o = 0; o < O; o++) {
+          vec_out[o] += vec_in * vec_wei[o];
+        }
       }
       if (_type == NodeType::ReLU) {
-        vec_out = _mm512_max_ps(vec_out, vec_zero);
+        #pragma unroll(O)
+        for (int o = 0; o < O; o++) {
+          vec_out[o] = _mm512_max_ps(vec_out[o], vec_zero);
+        }
       } else if (_type == NodeType::Softmax) {
-        vec_max = _mm512_max_ps(vec_out, vec_max);
+        #pragma unroll(O)
+        for (int o = 0; o < O; o++) {
+          vec_max = _mm512_max_ps(vec_out[o], vec_max);
+        }
       }
-      if (std::is_same<float, T>::value) {
-        _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o2 * V],
-                              k, vec_out);
-        //_mm512_mask_storeu_ps(&_nodeDataOpt[inputID].grads[o2 * V],
-        //                      k, vec_zero);
-
-      } else {
+      #pragma unroll(O)
+      for (int o = 0; o < O; o++) {
+        if (std::is_same<float, T>::value) {
+          _mm512_storeu_ps(&_nodeDataOpt[inputID].values[o2 * O * V + o * V],
+                           vec_out[o]);
+        } else {
         // TODO: bf16
+        }
       }
     }
     if (_type == NodeType::Softmax)
