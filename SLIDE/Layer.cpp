@@ -792,22 +792,14 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
       __m512 vec_out[O], vec_wei[O];
       #pragma unroll(O)
       for (int o = 0; o < O; o++) {
-        if (std::is_same<float, T>::value) {
-          vec_out[o] = _mm512_load_ps(&_bias[o2 * O * V + o * V]);
-        } else {
-          // TODO: bf16
-        }
+        vec_out[o] = _mm512_load<T>(&_bias[o2 * O * V + o * V]);
       }
 
       for (int ici = 0; ici < ICI; ici++) {
         int ic = in_indices[ici];
         #pragma unroll(O)
         for (int o = 0; o < O; o++) {
-          if (std::is_same<float, T>::value) {
-            vec_wei[o] = _mm512_load_ps(&_weights[ic * OC + o2 * O * V + o * V]);
-          } else {
-            // TODO: bf16
-          }
+          vec_wei[o] = _mm512_load<T>(&_weights[ic * OC + o2 * O * V + o * V]);
         }
         float in = in_values[ici];
         __m512 vec_in = _mm512_set1_ps(in);
@@ -829,12 +821,8 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
       }
       #pragma unroll(O)
       for (int o = 0; o < O; o++) {
-        if (std::is_same<float, T>::value) {
-          _mm512_storeu_ps(&_nodeDataOpt[inputID].values[o2 * O * V + o * V],
-                           vec_out[o]);
-        } else {
-        // TODO: bf16
-        }
+        _mm512_store<T>(&_nodeDataOpt[inputID].values[o2 * O * V + o * V],
+                        vec_out[o]);
       }
     }
     if (_type == NodeType::Softmax)
@@ -844,7 +832,7 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
     int Vr = ICI % V ? ICI % V : V;
     __m512 vec_max = _mm512_setzero_ps();
     __m512 vec_zero = _mm512_setzero_ps();
-    // TODO: unroll and save input load
+
     for (int oci = 0; oci < OCI; oci++) {
       T &value = _nodeDataOpt[inputID].values[oci];
       int oc = _nodeDataOpt[inputID].indices[oci];
@@ -855,12 +843,8 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
         int Vx = i2 == I2 - 1 ? Vr : V;
         __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
         __m512 vec_wei, vec_in;
-        if (std::is_same<float, T>::value) {
-          vec_wei = _mm512_maskz_load_ps(k, &_weights[oc * IC + i2 * V]);
-          vec_in = _mm512_maskz_load_ps(k, &in_values[i2 * V]);
-        } else {
-          // TODO: bf16
-        }
+        vec_wei = _mm512_maskz_load<T>(k, &_weights[oc * IC + i2 * V]);
+        vec_in = _mm512_maskz_load<T>(k, &in_values[i2 * V]);
         vec_out += vec_in * vec_wei;
       }
       res = _mm512_reduce_add_ps(vec_out);
@@ -912,20 +896,10 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
       int Vx = o2 == O2 - 1 ? Vr : V;
       __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
       __m512 vec_val;
-      if (std::is_same<T, float>::value) {
-        vec_val = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o2 * V]);
-      } else { // bfloat16
-        __m256i vec256_zero = _mm256_setzero_si256();
-        vec_val = _mm512_mask_load_bf16_as_fp32(vec256_zero, k, &_nodeDataOpt[inputID].values[o2 * V]);
-      }
+      vec_val = _mm512_maskz_load<T>(k, &_nodeDataOpt[inputID].values[o2 * V]);
       vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
       vec_sum += vec_val;
-      if (std::is_same<T, float>::value) {
-        _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].values[o2 * V], k, vec_val);
-      } else {
-        __m256i vec256_val = _mm512_cvt_fp32_to_bf16(vec_val);
-        _mm256_mask_storeu_epi16(&_nodeDataOpt[inputID].values[o2 * V], k, vec256_val);
-      }
+      _mm512_mask_store<T>(&_nodeDataOpt[inputID].values[o2 * V], k, vec_val);
     }
     float sum = _mm512_reduce_add_ps(vec_sum);
     _normalizationConstants[inputID] = sum;
@@ -970,25 +944,16 @@ void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
         int Vx = o2 == O2 - 1 ? Vr : V;
         __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
         __m512 vec_gy, vec_gw, vec_gb;
-        if (std::is_same<float, T>::value) {
-          vec_gy = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].grads[o2 * V]);
-          vec_gw = _mm512_maskz_load_ps(k, &_weightGrads[ic * OC + o2 * V]);
-          if (ici == 0)
-            vec_gb = _mm512_maskz_load_ps(k, &_biasGrads[o2 * V]);
-        } else {
-          // TODO: bf16
-        }
+        vec_gy = _mm512_maskz_load<T>(k, &_nodeDataOpt[inputID].grads[o2 * V]);
+        vec_gw = _mm512_maskz_load<T>(k, &_weightGrads[ic * OC + o2 * V]);
+        if (ici == 0)
+          vec_gb = _mm512_maskz_load<T>(k, &_biasGrads[o2 * V]);
         vec_gw += vec_gy * vec_x;
+        _mm512_mask_store<T>(&_weightGrads[ic * OC + o2 * V], k, vec_gw);
         if (ici == 0)
           vec_gb += vec_gy;
-        if (std::is_same<float, T>::value) {
-          _mm512_mask_storeu_ps(&_weightGrads[ic * OC + o2 * V], k, vec_gw);
-          if (ici == 0) {
-            _mm512_mask_storeu_ps(&_biasGrads[o2 * V], k, vec_gb);
-          }
-        } else {
-          // TODO: bf16
-        }
+        if (ici == 0)
+          _mm512_mask_store<T>(&_biasGrads[o2 * V], k, vec_gb);
       }
     }
   } else
@@ -1049,11 +1014,7 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
       #pragma unroll(I)
       for (int i = 0; i < I; i++) {
         vec_gx[i] = _mm512_setzero_ps();
-        if (std::is_same<float, T>::value) {
-          vec_x[i] = _mm512_load_ps(&prevValues[i2 * I * V + i * V]);
-        } else {
-          // TODO: bf16
-        }
+        vec_x[i] = _mm512_load<T>(&prevValues[i2 * I * V + i * V]);
         mask[i] = _mm512_cmp_ps_mask(vec_zero, vec_x[i], _MM_CMPINT_LT);
       }
 
@@ -1070,18 +1031,10 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
         #pragma unroll(I)
         for (int i = 0; i < I; i++) {
           int idx = IC * oc + i2 * I * V + i * V;
-          if (std::is_same<float, T>::value) {
-            vec_w[i] = _mm512_load_ps(&_weights[idx]);
-            vec_gw = _mm512_load_ps(&_weightGrads[idx]);
-          } else {
-            // TODO: bf16
-          }
+          vec_w[i] = _mm512_load<T>(&_weights[idx]);
+          vec_gw = _mm512_load<T>(&_weightGrads[idx]);
           vec_gw += vec_gy * vec_x[i]; // gw = gy * x
-          if (std::is_same<float, T>::value) {
-            _mm512_storeu_ps(&_weightGrads[idx], vec_gw);
-          } else {
-            // TODO: bf16
-          }
+          _mm512_store<T>(&_weightGrads[idx], vec_gw);
         }
         #pragma unroll(I)
         for (int i = 0; i < I; i++) {
@@ -1091,11 +1044,7 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
       }
       #pragma unroll(I)
       for (int i = 0; i < I; i++) {
-        if (std::is_same<float, T>::value) {
-          _mm512_store_ps(&prevGrads[i2 * I * V + i * V], vec_gx[i]);
-        } else {
-          // TODO: bf16
-        }
+        _mm512_store<T>(&prevGrads[i2 * I * V + i * V], vec_gx[i]);
       }
     }
   } else
@@ -1151,11 +1100,7 @@ void Layer<T>::computeExtraStatsForSoftMaxOpt(int *labels,
     __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
     __m512i vec_oc = _mm512_maskz_load_epi32(k, &_nodeDataOpt[inputID].indices[o2 * V]);
     __m512 vec_value, vec_grad;
-    if (std::is_same<float, T>::value) {
-      vec_value = _mm512_maskz_load_ps(k, &_nodeDataOpt[inputID].values[o2 * V]);
-    } else {
-      // TODO: bf16
-    }
+    vec_value = _mm512_maskz_load<T>(k, &_nodeDataOpt[inputID].values[o2 * V]);
     vec_value *= vec_rnorm;
     vec_grad = vec_value / vec_batchsize;
     __mmask16 mask = _mm512_int2mask(0);
@@ -1165,11 +1110,7 @@ void Layer<T>::computeExtraStatsForSoftMaxOpt(int *labels,
       mask = _mm512_kor(mask, tmp);
     }
     vec_grad = _mm512_mask_add_ps(vec_grad, mask, vec_grad, vec_bias);
-    if (std::is_same<float, T>::value) {
-      _mm512_mask_storeu_ps(&_nodeDataOpt[inputID].grads[o2 * V], k, vec_grad);
-    } else {
-      // TODO: bf16
-    }
+    _mm512_mask_store<T>(&_nodeDataOpt[inputID].grads[o2 * V], k, vec_grad);
   }
 #else
   for (int oci = 0; oci < OCI; oci++) {

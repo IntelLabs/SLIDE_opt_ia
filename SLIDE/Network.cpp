@@ -469,51 +469,37 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
         __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
         __m512 vec_mom, vec_vel, vec_w, vec_gw;
 
-        if (std::is_same<T, float>::value) {
-          vec_mom = _mm512_maskz_load_ps(k, &layer->_adamAvgMom[idx]);
-          vec_vel = _mm512_maskz_load_ps(k, &layer->_adamAvgVel[idx]);
-          vec_w = _mm512_maskz_load_ps(k, &layer->_weights[idx]);
-          vec_gw = _mm512_maskz_load_ps(k, &layer->_weightGrads[idx]);
-        } else {
-          // TODO: bf16
-        }
+        vec_mom = _mm512_maskz_load<T>(k, &layer->_adamAvgMom[idx]);
+        vec_vel = _mm512_maskz_load<T>(k, &layer->_adamAvgVel[idx]);
+        vec_w = _mm512_maskz_load<T>(k, &layer->_weights[idx]);
+        vec_gw = _mm512_maskz_load<T>(k, &layer->_weightGrads[idx]);
+
         vec_mom = vec_BETA1 * vec_mom + (vec_one - vec_BETA1) * vec_gw;
         vec_vel = vec_BETA2 * vec_vel + (vec_one - vec_BETA2) * vec_gw * vec_gw;
         vec_w += vec_ratio * vec_tmplr * vec_mom / (_mm512_sqrt_ps(vec_vel) + vec_EPS);
 
-        if (std::is_same<float, T>::value) {
-          _mm512_mask_storeu_ps(&layer->_adamAvgMom[idx], k, vec_mom);
-          _mm512_mask_storeu_ps(&layer->_adamAvgVel[idx], k, vec_vel);
-          _mm512_mask_storeu_ps(&layer->_weights[idx], k, vec_w);
-          _mm512_mask_storeu_ps(&layer->_weightGrads[idx], k, vec_zero);
-        } else {
-          // TODO: bf16
-        }
+        _mm512_mask_store<T>(&layer->_adamAvgMom[idx], k, vec_mom);
+        _mm512_mask_store<T>(&layer->_adamAvgVel[idx], k, vec_vel);
+        _mm512_mask_store<T>(&layer->_weights[idx], k, vec_w);
+        _mm512_mask_store<T>(&layer->_weightGrads[idx], k, vec_zero);
       };
       auto vecAdamBias = [&](int Vx, int idx) {
         __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
         __m512 vec_mom, vec_vel, vec_b, vec_gb;
 
-        if (std::is_same<T, float>::value) {
-          vec_mom = _mm512_maskz_load_ps(k, &layer->_adamAvgMomBias[idx]);
-          vec_vel = _mm512_maskz_load_ps(k, &layer->_adamAvgVelBias[idx]);
-          vec_b = _mm512_maskz_load_ps(k, &layer->_bias[idx]);
-          vec_gb = _mm512_maskz_load_ps(k, &layer->_biasGrads[idx]);
-        } else {
-          // TODO: bf16
-        }
+        vec_mom = _mm512_maskz_load<T>(k, &layer->_adamAvgMomBias[idx]);
+        vec_vel = _mm512_maskz_load<T>(k, &layer->_adamAvgVelBias[idx]);
+        vec_b = _mm512_maskz_load<T>(k, &layer->_bias[idx]);
+        vec_gb = _mm512_maskz_load<T>(k, &layer->_biasGrads[idx]);
+
         vec_mom = vec_BETA1 * vec_mom + (vec_one - vec_BETA1) * vec_gb;
         vec_vel = vec_BETA2 * vec_vel + (vec_one - vec_BETA2) * vec_gb * vec_gb;
         vec_b += vec_ratio * vec_tmplr * vec_mom / (_mm512_sqrt_ps(vec_vel) + vec_EPS);
 
-        if (std::is_same<float, T>::value) {
-          _mm512_mask_storeu_ps(&layer->_adamAvgMomBias[idx], k, vec_mom);
-          _mm512_mask_storeu_ps(&layer->_adamAvgVelBias[idx], k, vec_vel);
-          _mm512_mask_storeu_ps(&layer->_bias[idx], k, vec_b);
-          _mm512_mask_storeu_ps(&layer->_biasGrads[idx], k, vec_zero);
-        } else {
-          // TODO: bf16
-        }
+        _mm512_mask_store<T>(&layer->_adamAvgMomBias[idx], k, vec_mom);
+        _mm512_mask_store<T>(&layer->_adamAvgVelBias[idx], k, vec_vel);
+        _mm512_mask_store<T>(&layer->_bias[idx], k, vec_b);
+        _mm512_mask_store<T>(&layer->_biasGrads[idx], k, vec_zero);
       };
 #else
       auto adamWeights = [&](int idx) {
