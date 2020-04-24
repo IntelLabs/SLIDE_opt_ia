@@ -104,21 +104,18 @@ T Node<T, Tp>::getActivation(int* indices, T* values, int length, int inputID)
 	    _activeInputs++;
 	}
 
-#define PF_STR 32
-
-  float res = _bias;
+	_train[inputID]._lastActivations = 0;
 	for (int i = 0; i < length; i++)
 	{
-	    res += _weights[indices[i]] * values[i];
-      if (i + PF_STR < length)
-      _mm_prefetch(&_weights[indices[i + PF_STR]], _MM_HINT_T0);
+	    _train[inputID]._lastActivations += _weights[indices[i]] * values[i];
 	}
+	_train[inputID]._lastActivations += _bias;
 
 	switch (_type)
 	{
-	case NodeType::ReLU: // TODO
-		if (res < 0) {
-        res = 0;
+	case NodeType::ReLU:
+		if (_train[inputID]._lastActivations < 0) {
+		    _train[inputID]._lastActivations = 0;
 		    _train[inputID]._lastGradients = 1;
 		    _train[inputID]._lastDeltaforBPs = 0;
 
@@ -134,7 +131,7 @@ T Node<T, Tp>::getActivation(int* indices, T* values, int length, int inputID)
 		break;
 	}
 
-  return res;
+	return _train[inputID]._lastActivations;
 }
 
 
@@ -155,21 +152,6 @@ void Node<T, Tp>::ComputeExtaStatsForSoftMax(float normalizationConstant, int in
 	}
 }
 
-template <class T, class Tp>
-void Node<T, Tp>::ComputeExtaStatsForSoftMaxOpt(T &value, T &grad, float normalizationConstant, int inputID, int* label, int labelsize)
-{
-	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds ==1));
-
-	value /= normalizationConstant + 0.0000001;
-
-	//TODO:check  gradient
-	if (find (label, label+labelsize, _IDinLayer)!= label+labelsize) {
-	    grad = (1.0/labelsize - value) / _currentBatchsize;
-	}
-	else {
-	    grad = (-value) / _currentBatchsize;
-	}
-}
 
 template <class T, class Tp>
 void Node<T, Tp>::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
@@ -211,49 +193,6 @@ void Node<T, Tp>::backPropagate(Node* previousNodes, int* previousLayerActiveNod
 
 }
 
-template <class T, class Tp>
-void Node<T, Tp>::backPropagateOpt(T &value, T &grad, T *prevValues, T *prevGrads, Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
-{
-	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
-	for (int i = 0; i < previousLayerActiveNodeSize; i++)
-	{
-		//UpdateDelta before updating weights
-	    Node* prev_node = &(previousNodes[previousLayerActiveNodeIds[i]]);
-      if (prevValues[i] > 0) {
-        prevGrads[i] += grad * _weights[previousLayerActiveNodeIds[i]];
-      }
-
-
-		T grad_t = grad * prevValues[i];
-
-		if (ADAM)
-		{
-			_t[previousLayerActiveNodeIds[i]] += grad_t;
-		}
-		else
-		{
-			_mirrorWeights[previousLayerActiveNodeIds[i]] += learningRate * grad_t;
-		}
-	}
-
-	if (ADAM)
-	{
-		T biasgrad_t = grad;
-		T biasgrad_tsq = biasgrad_t * biasgrad_t;
-		_tbias += biasgrad_t;
-	}
-	else
-    {
-        _mirrorbias += learningRate * grad;
-    }
-
-	_train[inputID]._ActiveinputIds = 0;
-	grad = 0;
-  value = 0;
-	_activeInputs--;
-
-}
-
 
 template <class T, class Tp>
 void Node<T, Tp>::backPropagateFirstLayer(int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID)
@@ -289,42 +228,6 @@ void Node<T, Tp>::backPropagateFirstLayer(int* nnzindices, T* nnzvalues, int nnz
 	_train[inputID]._lastActivations = 0;
     _activeInputs--;
 }
-
-template <class T, class Tp>
-void Node<T, Tp>::backPropagateFirstLayerOpt(T &value, T &grad, int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID)
-{
-	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
-	for (int i = 0; i < nnzSize; i++)
-	{
-		T grad_t = grad * nnzvalues[i];
-		T grad_tsq = grad_t * grad_t;
-		if (ADAM)
-		{
-			_t[nnzindices[i]] += grad_t;
-		}
-		else
-		{
-			_mirrorWeights[nnzindices[i]] += learningRate * grad_t;
-		}
-	}
-
-	if (ADAM)
-	{
-		T biasgrad_t = grad;
-		T biasgrad_tsq = biasgrad_t * biasgrad_t;
-		_tbias += biasgrad_t;
-	}
-	else
-	{
-		_mirrorbias += learningRate * grad;
-	}
-
-	_train[inputID]._ActiveinputIds = 0;//deactivate inputIDs
-	grad = 0;
-  value = 0;
-    _activeInputs--;
-}
-
 
 template <class T, class Tp>
 void Node<T, Tp>::SetlastActivation(int inputID, T realActivation)

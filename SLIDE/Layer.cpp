@@ -504,36 +504,12 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivations(int** activenodesperlayer
     }
 
     if(_type == NodeType::Softmax) {
-      if (std::is_same<T, float>::value) {
-        constexpr int V = 16;
-        int O = (len + V - 1) / V;
-        int Vr = len % V ? len % V : V;
-        __m512 vec_max = _mm512_set1_ps(maxValue);
-        __m512 vec_sum = _mm512_setzero_ps();
-        __m512 vec_zero = _mm512_setzero_ps();
-        for (int o = 0; o < O; o++) {
-            int Vx = o == O - 1 ? Vr : V;
-            __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
-
-            __m512 vec_val = _mm512_maskz_load_ps(k, &activeValuesperlayer[layerIndex + 1][o * V]);
-            vec_val = _mm512_mask_exp_ps(vec_zero, k, vec_val - vec_max);
-            vec_sum += vec_val;
-            _mm512_mask_storeu_ps(&activeValuesperlayer[layerIndex + 1][o * V], k, vec_val);
-            for (int v = 0; v < Vx; v++) {
-                float val = activeValuesperlayer[layerIndex + 1][o * V + v];
-                _Nodes[activenodesperlayer[layerIndex + 1][o * V + v]].SetlastActivation(inputID, val);
-            }
-        }
-        float sum = _mm512_reduce_add_ps(vec_sum);
-        _normalizationConstants[inputID] = sum;
-      } else {
         for (int i = 0; i < len; i++) {
             T realActivation = exp(activeValuesperlayer[layerIndex + 1][i] - maxValue);
             activeValuesperlayer[layerIndex + 1][i] = realActivation;
             _Nodes[activenodesperlayer[layerIndex + 1][i]].SetlastActivation(inputID, realActivation);
             _normalizationConstants[inputID] += realActivation;
         }
-      }
     }
 
     return in;
@@ -777,7 +753,7 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
   int IC = _previousLayerNumOfNodes;
   int OC = _noOfNodes;
 
-#if OPT_VEC512
+#if OPT_IA && OPT_VEC512
   constexpr int V = 16;
   constexpr int O = 8;
   if (_weightsOrder == WeightsOrder::IO && OC == OCI) {
@@ -885,7 +861,7 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
   }
 
   if(_type == NodeType::Softmax) {
-#if OPT_VEC512
+#if OPT_IA && OPT_VEC512
     constexpr int V = 16;
     int O2 = (OCI + V - 1) / V;
     int Vr = OCI % V ? OCI % V : V;
@@ -928,7 +904,7 @@ void Layer<T, Tp>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
   int IC = _previousLayerNumOfNodes;
   bool isOIWeights = _weightsOrder == WeightsOrder::OI;
 
-#if OPT_VEC512
+#if OPT_IA && OPT_VEC512
   if (!isOIWeights && ADAM) {
     constexpr int V = 16;
     int O2 = (OCI + V - 1) / V;
@@ -997,7 +973,7 @@ void Layer<T, Tp>::backPropagateOpt(Layer<T, Tp> *prev_layer, int inputID, float
   T *prevValues = prev_layer->_nodeDataOpt[inputID].values;
   T *prevGrads = prev_layer->_nodeDataOpt[inputID].grads;
 
-#if OPT_VEC512
+#if OPT_IA && OPT_VEC512
   if (isOIWeights && ICI == IC && ADAM) {
     constexpr int V = 16;
     constexpr int I = 8;
@@ -1088,7 +1064,7 @@ void Layer<T, Tp>::computeExtraStatsForSoftMaxOpt(int *labels,
                                               int inputID,
                                               int currentBatchSize) {
   int OCI = _nodeDataOpt[inputID].size;
-#if OPT_VEC512
+#if OPT_IA && OPT_VEC512
   constexpr int V = 16;
   int O2 = (OCI + V - 1) / V;
   int Vr = OCI % V ? OCI % V : V;
