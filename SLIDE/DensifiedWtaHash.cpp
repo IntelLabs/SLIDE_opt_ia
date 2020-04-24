@@ -10,8 +10,7 @@
 #include "Config.h"
 using namespace std;
 
-template <class T>
-DensifiedWtaHash<T>::DensifiedWtaHash(int numHashes, int noOfBitsToHash)
+DensifiedWtaHash::DensifiedWtaHash(int numHashes, int noOfBitsToHash)
 {
 
     _numhashes = numHashes;
@@ -57,7 +56,7 @@ DensifiedWtaHash<T>::DensifiedWtaHash(int numHashes, int noOfBitsToHash)
 
 
 template <class T>
-int * DensifiedWtaHash<T>::getHashEasy(T* data, int dataLen, int topk, int stride)
+int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int stride)
 {
     // binsize is the number of times the range is larger than the total number of hashes we need.
 
@@ -112,7 +111,7 @@ int * DensifiedWtaHash<T>::getHashEasy(T* data, int dataLen, int topk, int strid
 }
 
 template <class T>
-int* DensifiedWtaHash<T>::getHash(int* indices, T* data, int dataLen)
+int* DensifiedWtaHash::getHash<T>(int* indices, T* data, int dataLen)
 {
     int *hashes = new int[_numhashes];
     T *values = new T[_numhashes];
@@ -167,19 +166,22 @@ int* DensifiedWtaHash<T>::getHash(int* indices, T* data, int dataLen)
     return hashArray;
 }
 
-template <class T>
-int DensifiedWtaHash<T>::getRandDoubleHash(int binid, int count) {
+int DensifiedWtaHash::getRandDoubleHash(int binid, int count) {
     unsigned int tohash = ((binid + 1) << 6) + count;
     return (_randHash[0] * tohash << 3) >> (32 - _lognumhash); // _lognumhash needs to be ceiled.
 }
 
 
-template <class T>
-DensifiedWtaHash<T>::~DensifiedWtaHash()
+DensifiedWtaHash::~DensifiedWtaHash()
 {
     delete[] _randHash;
     delete[] _indices;
 }
 
-template class DensifiedWtaHash<float>;
-template class DensifiedWtaHash<bfloat16>;
+
+template int* DensifiedWtaHash::getHashEasy<float>(float* data, int dataLen, int topk, int stride);
+template int* DensifiedWtaHash::getHashEasy<bfloat16>(bfloat16* data, int dataLen, int topk, int stride);
+
+template int* DensifiedWtaHash::getHash<float>(int* indices, float* data, int dataLen);
+template int* DensifiedWtaHash::getHash<bfloat16>(int* indices, bfloat16* data, int dataLen);
+

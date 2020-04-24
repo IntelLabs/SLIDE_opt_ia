@@ -32,11 +32,11 @@ public:
 	int _layerID, _noOfActive;
   size_t _previousLayerNumOfNodes;
 	size_t _noOfNodes;
-	T* _weights;
+	float* _weights;
   T* _weightGrads;
 	float* _adamAvgMom;
 	float* _adamAvgVel;
-	T* _bias;
+	float* _bias;
   T* _biasGrads;
   float* _adamAvgMomBias;
   float* _adamAvgVelBias;
@@ -51,16 +51,16 @@ public:
   NodeDataOpt *_nodeDataOpt; // per each record
 
 	LSH *_hashTables;
-	WtaHash<T> *_wtaHasher;
-  DensifiedMinhash<T> *_MinHasher;
-  SparseRandomProjection<T> *_srp;
-  DensifiedWtaHash<T> *_dwtaHasher;
+	WtaHash *_wtaHasher;
+  DensifiedMinhash *_MinHasher;
+  SparseRandomProjection *_srp;
+  DensifiedWtaHash *_dwtaHasher;
 	int * _binids;
-	Layer(size_t _numNodex, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize, int K, int L, int RangePow, float Sparsity, T* weights=NULL, T* bias=NULL, float *adamAvgMom=NULL, float *adamAvgVel=NULL);
+	Layer(size_t _numNodex, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize, int K, int L, int RangePow, float Sparsity, float* weights=NULL, float* bias=NULL, float *adamAvgMom=NULL, float *adamAvgVel=NULL);
 	Node<T>* getNodebyID(size_t nodeID);
 	Node<T>* getAllNodes();
 	int getNodeCount();
-	void addtoHashTable(T* weights, int length, T bias, int id, int stride = 1);
+	void addtoHashTable(float* weights, int length, float bias, int id, int stride = 1);
 	float getNomalizationConstant(int inputID);
 	int queryActiveNodeandComputeActivations(int** activenodesperlayer, T** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
 	int queryActiveNodeandComputeActivationsOpt(int* in_indices, T* in_values, int ICI, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);

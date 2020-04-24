@@ -11,8 +11,7 @@
 using namespace std;
 
 
-template <class T>
-WtaHash<T>::WtaHash(int numHashes, int noOfBitsToHash)
+WtaHash::WtaHash(int numHashes, int noOfBitsToHash)
 {
 
     _numhashes = numHashes;
@@ -38,7 +37,7 @@ WtaHash<T>::WtaHash(int numHashes, int noOfBitsToHash)
 
 
 template <class T>
-int * WtaHash<T>::getHash(T* data)
+int * WtaHash::getHash<T>(T* data)
 {
 
     // binsize is the number of times the range is larger than the total number of hashes we need.
@@ -69,10 +68,10 @@ int * WtaHash<T>::getHash(T* data)
 }
 
 
-template <class T>
-WtaHash<T>::~WtaHash()
+WtaHash::~WtaHash()
 {
 }
 
-template class WtaHash<float>;
-template class WtaHash<bfloat16>;
+template int* WtaHash::getHash<float>(float* data);
+template int* WtaHash::getHash<bfloat16>(bfloat16* data);
+

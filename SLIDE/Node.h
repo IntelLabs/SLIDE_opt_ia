@@ -77,21 +77,21 @@ public:
   size_t _dim, _layerNum, _IDinLayer;
 	int* _indicesInTables;
 	int* _indicesInBuckets;
-	T* _weights;
-	T* _mirrorWeights;
+	float* _weights;
+	float* _mirrorWeights;
 	float* _adamAvgMom;
 	float* _adamAvgVel;
-	T* _t; //for adam
+	float* _t; //for adam
 	int* _update;
-	T _bias =0;
-	T _tbias = 0;
+	float _bias =0;
+	float _tbias = 0;
 	float _adamAvgMombias=0;
 	float _adamAvgVelbias=0;
 	float _mirrorbias =0;
 
 	Node(){};
-	Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, T *weights, T bias, float *adamAvgMom, float *adamAvgVel);
-	void Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, T *weights, T bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob);
+	Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel);
+	void Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob);
 	void updateWeights(T* newWeights, T newbias);
 	T getLastActivation(int inputID);
 	void incrementDelta(int inputID, T incrementValue);

@@ -6,8 +6,7 @@
 
 using namespace std;
 
-template <class T>
-SparseRandomProjection<T>::SparseRandomProjection(size_t dimension, size_t numOfHashes, int ratio) {
+SparseRandomProjection::SparseRandomProjection(size_t dimension, size_t numOfHashes, int ratio) {
     _dim = dimension;
     _numhashes = numOfHashes;
     _samSize = ceil(1.0*_dim / ratio);
@@ -41,7 +40,7 @@ SparseRandomProjection<T>::SparseRandomProjection(size_t dimension, size_t numOf
 
 
 template <class T>
-int *SparseRandomProjection<T>::getHash(T *vector, int length) {
+int *SparseRandomProjection::getHash<T>(T *vector, int length) {
     // length should be = to _dim
     int *hashes = new int[_numhashes];
 
@@ -63,7 +62,7 @@ int *SparseRandomProjection<T>::getHash(T *vector, int length) {
 
 
 template <class T>
-int *SparseRandomProjection<T>::getHashSparse(int* indices, T *values, size_t length) {
+int *SparseRandomProjection::getHashSparse<T>(int* indices, T *values, size_t length) {
     int *hashes = new int[_numhashes];
 
     for (size_t p = 0; p < _numhashes; p++) {
@@ -94,8 +93,7 @@ int *SparseRandomProjection<T>::getHashSparse(int* indices, T *values, size_t le
     return hashes;
 }
 
-template <class T>
-SparseRandomProjection<T>::~SparseRandomProjection() {
+SparseRandomProjection::~SparseRandomProjection() {
     for (size_t i = 0; i < _numhashes; i++) {
         delete[]   _randBits[i];
         delete[]   _indices[i];
@@ -104,5 +102,10 @@ SparseRandomProjection<T>::~SparseRandomProjection() {
     delete[]   _indices;
 }
 
-template class SparseRandomProjection<float>;
-template class SparseRandomProjection<bfloat16>;
+
+template int* SparseRandomProjection::getHash<float>(float *vector, int length);
+template int* SparseRandomProjection::getHash<bfloat16>(bfloat16 *vector, int length);
+
+template int* SparseRandomProjection::getHashSparse<float>(int* indices, float *values, size_t length);
+template int* SparseRandomProjection::getHashSparse<bfloat16>(int* indices, bfloat16 *values, size_t length);
+

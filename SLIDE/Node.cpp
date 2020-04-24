@@ -13,7 +13,7 @@
 using namespace std;
 
 template <class T>
-Node<T>::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, T *weights, T bias, float *adamAvgMom, float *adamAvgVel)
+Node<T>::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel)
 {
 	_dim = dim;
 	_IDinLayer = nodeID;
@@ -25,7 +25,7 @@ Node<T>::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, T 
 	{
 		_adamAvgMom = adamAvgMom;
 		_adamAvgVel = adamAvgVel;
-		_t = new T[_dim]();
+		_t = new float[_dim]();
 
 	}
 
@@ -39,7 +39,7 @@ Node<T>::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, T 
 }
 
 template <class T>
-void Node<T>::Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, T *weights, T bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob)
+void Node<T>::Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob)
 {
     _dim = dim;
     _IDinLayer = nodeID;
@@ -51,7 +51,7 @@ void Node<T>::Update(int dim, int nodeID, int layerID, NodeType type, int batchs
     {
         _adamAvgMom = adamAvgMom;
         _adamAvgVel = adamAvgVel;
-        _t = new T[_dim]();
+        _t = new float[_dim]();
 
     }
 

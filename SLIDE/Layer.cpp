@@ -16,7 +16,7 @@ using namespace std;
 
 
 template <class T>
-Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize,  int K, int L, int RangePow, float Sparsity, T* weights, T* bias, float *adamAvgMom, float *adamAvgVel) {
+Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize,  int K, int L, int RangePow, float Sparsity, float* weights, float* bias, float *adamAvgMom, float *adamAvgVel) {
     _layerID = layerID;
     _noOfNodes = noOfNodes;
 #if !OPT_IA
@@ -49,16 +49,16 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
     _hashTables = new LSH(_K, _L, RangePow);
 
     if (HashFunction == 1) {
-        _wtaHasher = new WtaHash<T>(_K * _L, previousLayerNumOfNodes);
+        _wtaHasher = new WtaHash(_K * _L, previousLayerNumOfNodes);
     } else if (HashFunction == 2) {
         _binids = new int[previousLayerNumOfNodes];
-        _dwtaHasher = new DensifiedWtaHash<T>(_K * _L, previousLayerNumOfNodes);
+        _dwtaHasher = new DensifiedWtaHash(_K * _L, previousLayerNumOfNodes);
     } else if (HashFunction == 3) {
         _binids = new int[previousLayerNumOfNodes];
-        _MinHasher = new DensifiedMinhash<T>(_K * _L, previousLayerNumOfNodes);
+        _MinHasher = new DensifiedMinhash(_K * _L, previousLayerNumOfNodes);
         _MinHasher->getMap(previousLayerNumOfNodes, _binids);
     } else if (HashFunction == 4) {
-        _srp = new SparseRandomProjection<T>(previousLayerNumOfNodes, _K * _L, Ratio);
+        _srp = new SparseRandomProjection(previousLayerNumOfNodes, _K * _L, Ratio);
     }
 
 #if OPT_IA
@@ -81,8 +81,8 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
         }
 
     }else{
-        _weights = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes * previousLayerNumOfNodes);
-        _bias = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
+        _weights = (float *)aligned_alloc(64, sizeof(float) * _noOfNodes * previousLayerNumOfNodes);
+        _bias = (float *)aligned_alloc(64, sizeof(float) * _noOfNodes);
 #if OPT_IA
         _weightGrads =  (T *)aligned_alloc(64, sizeof(T) * _noOfNodes * previousLayerNumOfNodes);
         _biasGrads = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
@@ -91,8 +91,8 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
         default_random_engine dre(rd());
         normal_distribution<float> distribution(0.0, 0.01);
 
-        generate(_weights, _weights + _noOfNodes * previousLayerNumOfNodes, [&]() { return T(distribution(dre)); });
-        generate(_bias, _bias + _noOfNodes, [&] () { return T(distribution(dre)); });
+        generate(_weights, _weights + _noOfNodes * previousLayerNumOfNodes, [&]() { return float(distribution(dre)); });
+        generate(_bias, _bias + _noOfNodes, [&] () { return float(distribution(dre)); });
 
         if (ADAM)
         {
@@ -144,20 +144,20 @@ void Layer<T>::updateTable()
 
     if (HashFunction == 1) {
          delete _wtaHasher;
-        _wtaHasher = new WtaHash<T>(_K * _L, _previousLayerNumOfNodes);
+        _wtaHasher = new WtaHash(_K * _L, _previousLayerNumOfNodes);
     } else if (HashFunction == 2) {
          delete _dwtaHasher, _binids;
         _binids = new int[_previousLayerNumOfNodes];
-        _dwtaHasher = new DensifiedWtaHash<T>(_K * _L, _previousLayerNumOfNodes);
+        _dwtaHasher = new DensifiedWtaHash(_K * _L, _previousLayerNumOfNodes);
     } else if (HashFunction == 3) {
 
          delete _MinHasher,  _binids;
         _binids = new int[_previousLayerNumOfNodes];
-        _MinHasher = new DensifiedMinhash<T>(_K * _L, _previousLayerNumOfNodes);
+        _MinHasher = new DensifiedMinhash(_K * _L, _previousLayerNumOfNodes);
         _MinHasher->getMap(_previousLayerNumOfNodes, _binids);
     } else if (HashFunction == 4) {
 
-        _srp = new SparseRandomProjection<T>(_previousLayerNumOfNodes, _K * _L, Ratio);
+        _srp = new SparseRandomProjection(_previousLayerNumOfNodes, _K * _L, Ratio);
 
     }
 }
@@ -171,7 +171,7 @@ void Layer<T>::updateRandomNodes()
 
 
 template <class T>
-void Layer<T>::addtoHashTable(T* weights, int length, T bias, int ID, int stride)
+void Layer<T>::addtoHashTable(float* weights, int length, float bias, int ID, int stride)
 {
     //LSH logic
     int *hashes;
@@ -227,10 +227,10 @@ float Layer<T>::getNomalizationConstant(int inputID)
 
 
 template <class T>
-float innerproduct(int* index1, T* value1, int len1, T* value2, int stride = 1){
+float innerproduct(int* index1, T* value1, int len1, float* value2, int stride = 1){
     float total = 0;
     for (int i = 0; i < len1; i++){
-        total += float(value1[i])* float(value2[index1[i] * stride]);
+        total += float(value1[i]) * value2[index1[i] * stride];
     }
     return total;
 }
@@ -792,14 +792,14 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
       __m512 vec_out[O], vec_wei[O];
       #pragma unroll(O)
       for (int o = 0; o < O; o++) {
-        vec_out[o] = _mm512_load<T>(&_bias[o2 * O * V + o * V]);
+        vec_out[o] = _mm512_load<float>(&_bias[o2 * O * V + o * V]);
       }
 
       for (int ici = 0; ici < ICI; ici++) {
         int ic = in_indices[ici];
         #pragma unroll(O)
         for (int o = 0; o < O; o++) {
-          vec_wei[o] = _mm512_load<T>(&_weights[ic * OC + o2 * O * V + o * V]);
+          vec_wei[o] = _mm512_load<float>(&_weights[ic * OC + o2 * O * V + o * V]);
         }
         float in = in_values[ici];
         __m512 vec_in = _mm512_set1_ps(in);
@@ -843,7 +843,7 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
         int Vx = i2 == I2 - 1 ? Vr : V;
         __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
         __m512 vec_wei, vec_in;
-        vec_wei = _mm512_maskz_load<T>(k, &_weights[oc * IC + i2 * V]);
+        vec_wei = _mm512_maskz_load<float>(k, &_weights[oc * IC + i2 * V]);
         vec_in = _mm512_maskz_load<T>(k, &in_values[i2 * V]);
         vec_out += vec_in * vec_wei;
       }
@@ -1031,7 +1031,7 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
         #pragma unroll(I)
         for (int i = 0; i < I; i++) {
           int idx = IC * oc + i2 * I * V + i * V;
-          vec_w[i] = _mm512_load<T>(&_weights[idx]);
+          vec_w[i] = _mm512_load<float>(&_weights[idx]);
           vec_gw = _mm512_load<T>(&_weightGrads[idx]);
           vec_gw += vec_gy * vec_x[i]; // gw = gy * x
           _mm512_store<T>(&_weightGrads[idx], vec_gw);
@@ -1058,7 +1058,7 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
       for (int ici = 0; ici < ICI; ici++) {
         int ic = prev_layer->_nodeDataOpt[inputID].indices[ici];
         int idx = isOIWeights ? IC * oc + ic : ic * OC + oc;
-        T w = _weights[idx];
+        float w = _weights[idx];
         T &gw = _weightGrads[idx];
         if (oci == 0)
           prevGrads[ici] = 0;

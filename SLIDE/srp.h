@@ -2,7 +2,6 @@
 #pragma once
 using namespace std;
 
-template <class T>
 class SparseRandomProjection 
 {
 private:
@@ -12,7 +11,9 @@ private:
 	int ** _indices;
 public:
 	SparseRandomProjection(size_t dimention, size_t numOfHashes, int ratio);
+  template <class T>
 	int * getHash(T * vector, int length);
+  template <class T>
 	int * getHashSparse(int* indices, T *values, size_t length);
 	~SparseRandomProjection();
 };

@@ -13,15 +13,16 @@
 */
 using namespace std;
 
-template <class T>
 class DensifiedWtaHash
 {
 private:
     int *_randHash, _randa, _numhashes, _rangePow,_lognumhash, *_indices, *_pos, _permute;
 public:
     DensifiedWtaHash(int numHashes, int noOfBitsToHash);
+    template <class T>
     int * getHash(int* indices, T* data, int dataLen);
     int getRandDoubleHash(int binid, int count);
+    template <class T>
     int * getHashEasy(T* data, int dataLen, int topK, int stride = 1);
     ~DensifiedWtaHash();
 };

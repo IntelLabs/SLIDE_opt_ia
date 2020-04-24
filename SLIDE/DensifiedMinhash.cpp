@@ -18,8 +18,7 @@ struct cmp {
     };
 };
 
-template <class T>
-DensifiedMinhash<T>::DensifiedMinhash(int numHashes, int noOfBitsToHash)
+DensifiedMinhash::DensifiedMinhash(int numHashes, int noOfBitsToHash)
 {
 
     _numhashes = numHashes;
@@ -44,8 +43,7 @@ DensifiedMinhash<T>::DensifiedMinhash(int numHashes, int noOfBitsToHash)
 
 }
 
-template <class T>
-void DensifiedMinhash<T>::getMap(int n, int* binids)
+void DensifiedMinhash::getMap(int n, int* binids)
 {
     int range = 1 << _rangePow;
     // binsize is the number of times the range is larger than the total number of hashes we need.
@@ -66,7 +64,7 @@ void DensifiedMinhash<T>::getMap(int n, int* binids)
 
 
 template <class T>
-int * DensifiedMinhash<T>::getHashEasy(int* binids, T* data, int dataLen, int topK)
+int * DensifiedMinhash::getHashEasy<T>(int* binids, T* data, int dataLen, int topK)
 {
 
     // binsize is the number of times the range is larger than the total number of hashes we need.
@@ -136,7 +134,7 @@ int * DensifiedMinhash<T>::getHashEasy(int* binids, T* data, int dataLen, int to
 }
 
 template <class T>
-int * DensifiedMinhash<T>::getHash(int* indices, T* data, int* binids, int dataLen)
+int * DensifiedMinhash::getHash<T>(int* indices, T* data, int* binids, int dataLen)
 {
     int *hashes = new int[_numhashes];
     int *hashArray = new int[_numhashes];
@@ -187,18 +185,20 @@ int * DensifiedMinhash<T>::getHash(int* indices, T* data, int* binids, int dataL
 }
 
 
-template <class T>
-int DensifiedMinhash<T>::getRandDoubleHash(int binid, int count) {
+int DensifiedMinhash::getRandDoubleHash(int binid, int count) {
     unsigned int tohash = ((binid + 1) << 6) + count;
     return (_randHash[0] * tohash << 3) >> (32 - _lognumhash); // _lognumhash needs to be ceiled.
 }
 
 
-template <class T>
-DensifiedMinhash<T>::~DensifiedMinhash()
+DensifiedMinhash::~DensifiedMinhash()
 {
     delete[] _randHash;
 }
 
-template class DensifiedMinhash<float>;
-template class DensifiedMinhash<bfloat16>;
+template int* DensifiedMinhash::getHashEasy<float>(int* binids, float* data, int dataLen, int topK);
+template int* DensifiedMinhash::getHashEasy<bfloat16>(int* binids, bfloat16* data, int dataLen, int topK);
+
+template int* DensifiedMinhash::getHash<float>(int* indices, float* data, int* binids, int dataLen);
+template int* DensifiedMinhash::getHash<bfloat16>(int* indices, bfloat16* data, int* binids, int dataLen);
+
