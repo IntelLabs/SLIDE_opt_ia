@@ -378,18 +378,78 @@ inline bfloat16 operator--(bfloat16& x, int unused) { // postfix decrement
 //     return out;
 // }
 
-inline __m512 _mm512_mask_load_bf16_as_fp32(__m256i pack,
-                                            __mmask16 k, const void *src) {
-  __m512i data = _mm512_cvtepu16_epi32(_mm256_mask_loadu_epi16(pack, k, src));
+static inline __m512 _mm512_mask_load_bf16_as_fp32(__m256i pack,
+                                            __mmask16 k, const void *addr) {
+  __m512i data = _mm512_cvtepu16_epi32(_mm256_mask_loadu_epi16(pack, k, addr));
   return _mm512_castsi512_ps(_mm512_bslli_epi128(data, 2));
 }
 
-inline __m256i _mm512_cvt_fp32_to_bf16(__m512 src) {
+static inline __m512 _mm512_maskz_load_bf16_as_fp32(__mmask16 k, const void *addr) {
+  __m512i data = _mm512_cvtepu16_epi32(_mm256_maskz_loadu_epi16(k, addr));
+  return _mm512_castsi512_ps(_mm512_bslli_epi128(data, 2));
+}
+
+static inline __m512 _mm512_load_bf16_as_fp32(const void *addr) {
+  __m512i data = _mm512_cvtepu16_epi32(_mm256_loadu_epi16(addr));
+  return _mm512_castsi512_ps(_mm512_bslli_epi128(data, 2));
+}
+
+
+static inline __m256i _mm512_cvt_fp32_to_bf16(__m512 src) {
 #if OPT_CPX_BF16
   __m256i vec256_val = _mm512_cvtneps_pbh(src);
 #else
-  __m256i vec256_val = _mm512_cvtepi32_epi16(_mm512_bsrli_epi128(_mm512_castps_si512(src), 2));
+  __m256i vec256_val = _mm512_cvtepi32_epi16(_mm512_bsrli_epi128(
+          _mm512_castps_si512(src), 2));
 #endif
   return vec256_val;
 }
+
+static inline void _mm512_mask_store_fp32_as_bf16(void *addr,
+                                           __mmask16 k, __m512 data) {
+  return _mm256_mask_storeu_epi16(addr, k, _mm512_cvt_fp32_to_bf16(data));
+
+}
+
+static inline void _mm512_store_fp32_as_bf16(void *addr, __m512 data) {
+  return _mm256_storeu_epi16(addr, _mm512_cvt_fp32_to_bf16(data));
+
+}
+
+template <class T>
+static inline __m512 _mm512_load(const void *addr) {
+  if (std::is_same<float, T>::value) {
+    return _mm512_load_ps(addr);
+  } else {
+    return _mm512_load_bf16_as_fp32(addr);
+  }
+}
+
+template <class T>
+static inline __m512 _mm512_maskz_load(__mmask16 k, void *addr) {
+  if (std::is_same<float, T>::value) {
+    return _mm512_maskz_load_ps(k, addr);
+  } else {
+    return _mm512_maskz_load_bf16_as_fp32(k, addr);
+  }
+}
+
+template <class T>
+static inline void _mm512_store(void *addr, __m512 data) {
+  if (std::is_same<float, T>::value) {
+    _mm512_store_ps(addr, data);
+  } else {
+    _mm512_store_fp32_as_bf16(addr, data);
+  }
+}
+
+template <class T>
+static inline void _mm512_mask_store(void *addr, __mmask16 k, __m512 data) {
+  if (std::is_same<float, T>::value) {
+    _mm512_mask_store_ps(addr, k, data);
+  } else {
+    _mm512_mask_store_fp32_as_bf16(addr, k, data);
+  }
+}
+
 #endif
