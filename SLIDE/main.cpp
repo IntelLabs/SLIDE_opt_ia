@@ -37,7 +37,7 @@ int Epoch = 5;
 int Stepsize = 20;
 int *sizesOfLayers;
 int numLayer = 3;
-bool Bfloat16Opt = false;
+int Bfloat16Opt = 1;
 string trainData = "";
 string testData = "";
 string Weights = "";
@@ -223,11 +223,7 @@ void parseconfig(string filename)
         }
         else if (trim(first) == "Bfloat16Opt")
         {
-            string str = trim(second);
-            std::transform(str.begin(), str.end(), str.begin(),
-                           [](unsigned char c){ return std::tolower(c); });
-            Bfloat16Opt =
-              (str == "true" || str == "yes" || str == "1") ? true : false;
+            Bfloat16Opt = atoi(trim(second).c_str());
         }
         else
         {
@@ -600,14 +596,21 @@ int main(int argc, char* argv[]) {
   _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 #endif
 
-  if (Bfloat16Opt)
-    /*
-      In bfloat16 mode, float32 master weights is needed
-      for accuracy preservation.
-      return Execute<bfloat16, bfloat16>();
-    */
-    return Execute<bfloat16, float>();
-  else
-    return Execute<float, float>();
+  switch (Bfloat16Opt) {
+    case 0:
+      cout << "Precision: FP32" << endl;
+      return Execute<float, float>();
+#if OPT_IA
+    case 1:
+      // FP32 master weights is needed for accuracy preservation.
+      cout << "Precision: BFLOAT16 + FP32 master weights" << endl;
+      return Execute<bfloat16, float>();
+    case 2:
+      cout << "Precision: BFLOAT16 (activation + weights)" << endl;
+      return Execute<bfloat16, float>();
+#endif
+    default:
+      return 0;
+  }
 }
 

@@ -25,4 +25,7 @@ savedweight=../savedWeight.npz
 
 logFile=../dataset/log.txt
 
-Bfloat16Opt=Yes
+# 0: off
+# 1: bfloat16 activation + float32 master weights
+# 2: bfloat16 activation and weights
+Bfloat16Opt=1
