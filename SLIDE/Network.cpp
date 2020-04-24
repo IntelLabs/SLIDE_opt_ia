@@ -8,11 +8,11 @@
 using namespace std;
 
 
-template <class T>
-Network<T>::Network(int *sizesOfLayers, NodeType *layersTypes, int noOfLayers, int batchSize, float lr, int inputdim,  int* K, int* L, int* RangePow, float* Sparsity, cnpy::npz_t arr) {
+template <class T, class Tp>
+Network<T, Tp>::Network(int *sizesOfLayers, NodeType *layersTypes, int noOfLayers, int batchSize, float lr, int inputdim,  int* K, int* L, int* RangePow, float* Sparsity, cnpy::npz_t arr) {
 
     _numberOfLayers = noOfLayers;
-    _hiddenlayers = new Layer<T> *[noOfLayers];
+    _hiddenlayers = new Layer<T, Tp> *[noOfLayers];
     _sizesOfLayers = sizesOfLayers;
     _layersTypes = layersTypes;
     _learningRate = lr;
@@ -23,45 +23,45 @@ Network<T>::Network(int *sizesOfLayers, NodeType *layersTypes, int noOfLayers, i
     for (int i = 0; i < noOfLayers; i++) {
         if (i != 0) {
             cnpy::NpyArray weightArr, biasArr, adamArr, adamvArr;
-            float* weight, *bias;
+            Tp* weight, *bias;
             float *adamAvgMom, *adamAvgVel;
             if(LOADWEIGHT){
                 weightArr = arr["w_layer_"+to_string(i)];
-                weight = weightArr.data<float>();
+                weight = weightArr.data<Tp>();
                 biasArr = arr["b_layer_"+to_string(i)];
-                bias = biasArr.data<float>();
+                bias = biasArr.data<Tp>();
 
                 adamArr = arr["am_layer_"+to_string(i)];
                 adamAvgMom = adamArr.data<float>();
                 adamvArr = arr["av_layer_"+to_string(i)];
                 adamAvgVel = adamvArr.data<float>();
             }
-            _hiddenlayers[i] = new Layer<T>(sizesOfLayers[i], sizesOfLayers[i - 1], i, _layersTypes[i], _currentBatchSize,  K[i], L[i], RangePow[i], Sparsity[i], weight, bias, adamAvgMom, adamAvgVel);
+            _hiddenlayers[i] = new Layer<T, Tp>(sizesOfLayers[i], sizesOfLayers[i - 1], i, _layersTypes[i], _currentBatchSize,  K[i], L[i], RangePow[i], Sparsity[i], weight, bias, adamAvgMom, adamAvgVel);
         } else {
 
             cnpy::NpyArray weightArr, biasArr, adamArr, adamvArr;
-            float* weight, *bias;
+            Tp* weight, *bias;
             float *adamAvgMom, *adamAvgVel;
             if(LOADWEIGHT){
                 weightArr = arr["w_layer_"+to_string(i)];
-                weight = weightArr.data<float>();
+                weight = weightArr.data<Tp>();
                 biasArr = arr["b_layer_"+to_string(i)];
-                bias = biasArr.data<float>();
+                bias = biasArr.data<Tp>();
 
                 adamArr = arr["am_layer_"+to_string(i)];
                 adamAvgMom = adamArr.data<float>();
                 adamvArr = arr["av_layer_"+to_string(i)];
                 adamAvgVel = adamvArr.data<float>();
             }
-            _hiddenlayers[i] = new Layer<T>(sizesOfLayers[i], inputdim, i, _layersTypes[i], _currentBatchSize, K[i], L[i], RangePow[i], Sparsity[i], weight, bias, adamAvgMom, adamAvgVel);
+            _hiddenlayers[i] = new Layer<T, Tp>(sizesOfLayers[i], inputdim, i, _layersTypes[i], _currentBatchSize, K[i], L[i], RangePow[i], Sparsity[i], weight, bias, adamAvgMom, adamAvgVel);
         }
     }
     cout << "after layer" << endl;
 }
 
 
-template <class T>
-Layer<T> *Network<T>::getLayer(int LayerID) {
+template <class T, class Tp>
+Layer<T, Tp> *Network<T, Tp>::getLayer(int LayerID) {
     if (LayerID < _numberOfLayers)
         return _hiddenlayers[LayerID];
     else {
@@ -70,8 +70,8 @@ Layer<T> *Network<T>::getLayer(int LayerID) {
     }
 }
 
-template <class T>
-int Network<T>::predictClassOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex) {
+template <class T, class Tp>
+int Network<T, Tp>::predictClassOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex) {
   alignas(64) int correctPred = 0;
 
   auto t1 = std::chrono::high_resolution_clock::now();
@@ -126,8 +126,8 @@ int Network<T>::predictClassOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
 }
 
-template <class T>
-int Network<T>::predictClass(int **inputIndices, T **inputValues, int *length, int **labels, int *labelsize) {
+template <class T, class Tp>
+int Network<T, Tp>::predictClass(int **inputIndices, T **inputValues, int *length, int **labels, int *labelsize) {
     alignas(64) int correctPred = 0;
 
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -179,8 +179,8 @@ int Network<T>::predictClass(int **inputIndices, T **inputValues, int *length, i
 }
 
 
-template <class T>
-int Network<T>::ProcessInput(int **inputIndices, T **inputValues, int *lengths, int **labels, int *labelsize, int iter, bool rehash, bool rebuild) {
+template <class T, class Tp>
+int Network<T, Tp>::ProcessInput(int **inputIndices, T **inputValues, int *lengths, int **labels, int *labelsize, int iter, bool rehash, bool rebuild) {
 
     float logloss = 0.0;
     int* avg_retrieval = new int[_numberOfLayers]();
@@ -231,11 +231,11 @@ int Network<T>::ProcessInput(int **inputIndices, T **inputValues, int *lengths, 
         //Now backpropagate.
         // layers
         for (int j = _numberOfLayers - 1; j >= 0; j--) {
-            Layer<T>* layer = _hiddenlayers[j];
-            Layer<T>* prev_layer = _hiddenlayers[j - 1];
+            Layer<T, Tp>* layer = _hiddenlayers[j];
+            Layer<T, Tp>* prev_layer = _hiddenlayers[j - 1];
             // nodes
             for (int k = 0; k < sizesPerBatch[i][j + 1]; k++) {
-                Node<T>* node = layer->getNodebyID(activeNodesPerBatch[i][j + 1][k]);
+                Node<T, Tp>* node = layer->getNodebyID(activeNodesPerBatch[i][j + 1][k]);
                 if (j == _numberOfLayers - 1) {
                     //TODO: Compute Extra stats: labels[i];
                     node->ComputeExtaStatsForSoftMax(layer->getNomalizationConstant(i), i, labels[i], labelsize[i]);
@@ -290,7 +290,7 @@ int Network<T>::ProcessInput(int **inputIndices, T **inputValues, int *lengths, 
 #pragma omp parallel for
         for (size_t m = 0; m < _hiddenlayers[l]->_noOfNodes; m++)
         {
-            Node<T> *tmp = _hiddenlayers[l]->getNodebyID(m);
+            Node<T, Tp> *tmp = _hiddenlayers[l]->getNodebyID(m);
             int dim = tmp->_dim;
             float* local_weights = new float[dim];
             std::copy(tmp->_weights, tmp->_weights + dim, local_weights);
@@ -356,8 +356,8 @@ int Network<T>::ProcessInput(int **inputIndices, T **inputValues, int *lengths, 
     return logloss;
 }
 
-template <class T>
-int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex,
+template <class T, class Tp>
+int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex,
                              int iter, bool rehash, bool rebuild) {
 
   float logloss = 0.0;
@@ -411,8 +411,8 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
     // Now backpropagate.
     for (int l = _numberOfLayers - 1; l >= 0; l--) {
-      Layer<T>* layer = _hiddenlayers[l];
-      Layer<T>* prev_layer = _hiddenlayers[l - 1];
+      Layer<T, Tp>* layer = _hiddenlayers[l];
+      Layer<T, Tp>* prev_layer = _hiddenlayers[l - 1];
 
       if (l == _numberOfLayers - 1)
         layer->computeExtraStatsForSoftMaxOpt(labels, labelSize, n,
@@ -447,7 +447,7 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
       _hiddenlayers[l]->updateTable();
     }
     int ratio = 1;
-    Layer<T> *layer = _hiddenlayers[l];
+    Layer<T, Tp> *layer = _hiddenlayers[l];
     size_t OC = _hiddenlayers[l]->_noOfNodes;
     size_t IC = _hiddenlayers[l]->_previousLayerNumOfNodes;
     bool isOIWeights = _hiddenlayers[l]->_weightsOrder == WeightsOrder::OI;
@@ -471,7 +471,7 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
         vec_mom = _mm512_maskz_load<float>(k, &layer->_adamAvgMom[idx]);
         vec_vel = _mm512_maskz_load<float>(k, &layer->_adamAvgVel[idx]);
-        vec_w = _mm512_maskz_load<float>(k, &layer->_weights[idx]);
+        vec_w = _mm512_maskz_load<Tp>(k, &layer->_weights[idx]);
         vec_gw = _mm512_maskz_load<T>(k, &layer->_weightGrads[idx]);
 
         vec_mom = vec_BETA1 * vec_mom + (vec_one - vec_BETA1) * vec_gw;
@@ -480,7 +480,7 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
         _mm512_mask_store<float>(&layer->_adamAvgMom[idx], k, vec_mom);
         _mm512_mask_store<float>(&layer->_adamAvgVel[idx], k, vec_vel);
-        _mm512_mask_store<float>(&layer->_weights[idx], k, vec_w);
+        _mm512_mask_store<Tp>(&layer->_weights[idx], k, vec_w);
         _mm512_mask_store<T>(&layer->_weightGrads[idx], k, vec_zero);
       };
       auto vecAdamBias = [&](int Vx, int idx) {
@@ -489,7 +489,7 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
         vec_mom = _mm512_maskz_load<float>(k, &layer->_adamAvgMomBias[idx]);
         vec_vel = _mm512_maskz_load<float>(k, &layer->_adamAvgVelBias[idx]);
-        vec_b = _mm512_maskz_load<float>(k, &layer->_bias[idx]);
+        vec_b = _mm512_maskz_load<Tp>(k, &layer->_bias[idx]);
         vec_gb = _mm512_maskz_load<T>(k, &layer->_biasGrads[idx]);
 
         vec_mom = vec_BETA1 * vec_mom + (vec_one - vec_BETA1) * vec_gb;
@@ -498,7 +498,7 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
         _mm512_mask_store<float>(&layer->_adamAvgMomBias[idx], k, vec_mom);
         _mm512_mask_store<float>(&layer->_adamAvgVelBias[idx], k, vec_vel);
-        _mm512_mask_store<float>(&layer->_bias[idx], k, vec_b);
+        _mm512_mask_store<Tp>(&layer->_bias[idx], k, vec_b);
         _mm512_mask_store<T>(&layer->_biasGrads[idx], k, vec_zero);
       };
 #else
@@ -609,8 +609,8 @@ int Network<T>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex
 
 
 
-template <class T>
-void Network<T>::saveWeights(string file)
+template <class T, class Tp>
+void Network<T, Tp>::saveWeights(string file)
 {
     for (int i=0; i< _numberOfLayers; i++){
         _hiddenlayers[i]->saveWeights(file);
@@ -618,8 +618,8 @@ void Network<T>::saveWeights(string file)
 }
 
 
-template <class T>
-Network<T>::~Network() {
+template <class T, class Tp>
+Network<T, Tp>::~Network() {
 
     delete[] _sizesOfLayers;
     for (int i=0; i< _numberOfLayers; i++){
@@ -629,5 +629,6 @@ Network<T>::~Network() {
     delete[] _layersTypes;
 }
 
-template class Network<float>;
-template class Network<bfloat16>;
+template class Network<float, float>;
+template class Network<bfloat16, float>;
+template class Network<bfloat16, bfloat16>;

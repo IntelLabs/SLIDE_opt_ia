@@ -15,12 +15,12 @@
 using namespace std;
 
 
-template <class T>
-Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize,  int K, int L, int RangePow, float Sparsity, float* weights, float* bias, float *adamAvgMom, float *adamAvgVel) {
+template <class T, class Tp>
+Layer<T, Tp>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize,  int K, int L, int RangePow, float Sparsity, Tp* weights, Tp* bias, float *adamAvgMom, float *adamAvgVel) {
     _layerID = layerID;
     _noOfNodes = noOfNodes;
 #if !OPT_IA
-    _Nodes = new Node[noOfNodes];
+    _Nodes = new Node<T, Tp>[noOfNodes];
 #endif
     _type = type;
     _noOfActive = floor(_noOfNodes * Sparsity);
@@ -81,8 +81,8 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
         }
 
     }else{
-        _weights = (float *)aligned_alloc(64, sizeof(float) * _noOfNodes * previousLayerNumOfNodes);
-        _bias = (float *)aligned_alloc(64, sizeof(float) * _noOfNodes);
+        _weights = (Tp *)aligned_alloc(64, sizeof(Tp) * _noOfNodes * previousLayerNumOfNodes);
+        _bias = (Tp *)aligned_alloc(64, sizeof(Tp) * _noOfNodes);
 #if OPT_IA
         _weightGrads =  (T *)aligned_alloc(64, sizeof(T) * _noOfNodes * previousLayerNumOfNodes);
         _biasGrads = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
@@ -91,8 +91,8 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
         default_random_engine dre(rd());
         normal_distribution<float> distribution(0.0, 0.01);
 
-        generate(_weights, _weights + _noOfNodes * previousLayerNumOfNodes, [&]() { return float(distribution(dre)); });
-        generate(_bias, _bias + _noOfNodes, [&] () { return float(distribution(dre)); });
+        generate(_weights, _weights + _noOfNodes * previousLayerNumOfNodes, [&]() { return Tp(distribution(dre)); });
+        generate(_bias, _bias + _noOfNodes, [&] () { return Tp(distribution(dre)); });
 
         if (ADAM)
         {
@@ -138,8 +138,8 @@ Layer<T>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, Node
 }
 
 
-template <class T>
-void Layer<T>::updateTable()
+template <class T, class Tp>
+void Layer<T, Tp>::updateTable()
 {
 
     if (HashFunction == 1) {
@@ -163,15 +163,15 @@ void Layer<T>::updateTable()
 }
 
 
-template <class T>
-void Layer<T>::updateRandomNodes()
+template <class T, class Tp>
+void Layer<T, Tp>::updateRandomNodes()
 {
     std::random_shuffle(_randNode, _randNode + _noOfNodes);
 }
 
 
-template <class T>
-void Layer<T>::addtoHashTable(float* weights, int length, float bias, int ID, int stride)
+template <class T, class Tp>
+void Layer<T, Tp>::addtoHashTable(Tp* weights, int length, Tp bias, int ID, int stride)
 {
     //LSH logic
     int *hashes;
@@ -198,36 +198,36 @@ void Layer<T>::addtoHashTable(float* weights, int length, float bias, int ID, in
 }
 
 
-template <class T>
-Node<T>* Layer<T>::getNodebyID(size_t nodeID)
+template <class T, class Tp>
+Node<T, Tp>* Layer<T, Tp>::getNodebyID(size_t nodeID)
 {
     assert(("nodeID less than _noOfNodes" , nodeID < _noOfNodes));
     return &_Nodes[nodeID];
 }
 
 
-template <class T>
-Node<T>* Layer<T>::getAllNodes()
+template <class T, class Tp>
+Node<T, Tp>* Layer<T, Tp>::getAllNodes()
 {
     return _Nodes;
 }
 
-template <class T>
-int Layer<T>::getNodeCount()
+template <class T, class Tp>
+int Layer<T, Tp>::getNodeCount()
 {
     return _noOfNodes;
 }
 
-template <class T>
-float Layer<T>::getNomalizationConstant(int inputID)
+template <class T, class Tp>
+float Layer<T, Tp>::getNomalizationConstant(int inputID)
 {
     assert(("Error Call to Normalization Constant for non - softmax layer", _type == NodeType::Softmax));
     return _normalizationConstants[inputID];
 }
 
 
-template <class T>
-float innerproduct(int* index1, T* value1, int len1, float* value2, int stride = 1){
+template <class T, class Tp>
+float innerproduct(int* index1, T* value1, int len1, Tp* value2, int stride = 1){
     float total = 0;
     for (int i = 0; i < len1; i++){
         total += float(value1[i]) * value2[index1[i] * stride];
@@ -235,7 +235,7 @@ float innerproduct(int* index1, T* value1, int len1, float* value2, int stride =
     return total;
 }
 
-template <class T>
+template <class T, class Tp>
 float collision(int* hashes, int* table_hashes, int k, int l){
     int cp = 0;
     for (int i=0; i<l; i=i+k){
@@ -252,8 +252,8 @@ float collision(int* hashes, int* table_hashes, int k, int l){
     return cp*1.0/(l/k);
 }
 
-template <class T>
-int Layer<T>::queryActiveNodeandComputeActivations(int** activenodesperlayer, T** activeValuesperlayer, int* lengths, int layerIndex, int inputID, int* label, int labelsize, float Sparsity, int iter)
+template <class T, class Tp>
+int Layer<T, Tp>::queryActiveNodeandComputeActivations(int** activenodesperlayer, T** activeValuesperlayer, int* lengths, int layerIndex, int inputID, int* label, int labelsize, float Sparsity, int iter)
 {
     //LSH QueryLogic
 
@@ -540,8 +540,8 @@ int Layer<T>::queryActiveNodeandComputeActivations(int** activenodesperlayer, T*
 }
 
 
-template <class T>
-int Layer<T>::queryActiveNodeandComputeActivationsOpt(
+template <class T, class Tp>
+int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
     int* in_indices, T* in_values, int ICI,
     int layerID, int inputID, int* label, int labelsize,
     float Sparsity, int iter) {
@@ -792,14 +792,14 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
       __m512 vec_out[O], vec_wei[O];
       #pragma unroll(O)
       for (int o = 0; o < O; o++) {
-        vec_out[o] = _mm512_load<float>(&_bias[o2 * O * V + o * V]);
+        vec_out[o] = _mm512_load<Tp>(&_bias[o2 * O * V + o * V]);
       }
 
       for (int ici = 0; ici < ICI; ici++) {
         int ic = in_indices[ici];
         #pragma unroll(O)
         for (int o = 0; o < O; o++) {
-          vec_wei[o] = _mm512_load<float>(&_weights[ic * OC + o2 * O * V + o * V]);
+          vec_wei[o] = _mm512_load<Tp>(&_weights[ic * OC + o2 * O * V + o * V]);
         }
         float in = in_values[ici];
         __m512 vec_in = _mm512_set1_ps(in);
@@ -843,7 +843,7 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
         int Vx = i2 == I2 - 1 ? Vr : V;
         __mmask16 k = _cvtu32_mask16((1 << Vx) - 1);
         __m512 vec_wei, vec_in;
-        vec_wei = _mm512_maskz_load<float>(k, &_weights[oc * IC + i2 * V]);
+        vec_wei = _mm512_maskz_load<Tp>(k, &_weights[oc * IC + i2 * V]);
         vec_in = _mm512_maskz_load<T>(k, &in_values[i2 * V]);
         vec_out += vec_in * vec_wei;
       }
@@ -917,8 +917,8 @@ int Layer<T>::queryActiveNodeandComputeActivationsOpt(
   return in;
 }
 
-template <class T>
-void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
+template <class T, class Tp>
+void Layer<T, Tp>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
                                           int inputID,
                                           int recordIndex,
                                           float tmplr) {
@@ -987,8 +987,8 @@ void Layer<T>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
   }
 }
 
-template <class T>
-void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) {
+template <class T, class Tp>
+void Layer<T, Tp>::backPropagateOpt(Layer<T, Tp> *prev_layer, int inputID, float tmplr) {
   int OCI = _nodeDataOpt[inputID].size;
   int ICI = prev_layer->_nodeDataOpt[inputID].size;
   int OC = _noOfNodes;
@@ -1031,7 +1031,7 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
         #pragma unroll(I)
         for (int i = 0; i < I; i++) {
           int idx = IC * oc + i2 * I * V + i * V;
-          vec_w[i] = _mm512_load<float>(&_weights[idx]);
+          vec_w[i] = _mm512_load<Tp>(&_weights[idx]);
           vec_gw = _mm512_load<T>(&_weightGrads[idx]);
           vec_gw += vec_gy * vec_x[i]; // gw = gy * x
           _mm512_store<T>(&_weightGrads[idx], vec_gw);
@@ -1082,8 +1082,8 @@ void Layer<T>::backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr) 
   }
 }
 
-template <class T>
-void Layer<T>::computeExtraStatsForSoftMaxOpt(int *labels,
+template <class T, class Tp>
+void Layer<T, Tp>::computeExtraStatsForSoftMaxOpt(int *labels,
                                               int labelSize,
                                               int inputID,
                                               int currentBatchSize) {
@@ -1128,8 +1128,8 @@ void Layer<T>::computeExtraStatsForSoftMaxOpt(int *labels,
 #endif
 }
 
-template <class T>
-void Layer<T>::saveWeights(string file)
+template <class T, class Tp>
+void Layer<T, Tp>::saveWeights(string file)
 {
     if (_layerID==0) {
         cnpy::npz_save(file, "w_layer_0", _weights, {_noOfNodes, _previousLayerNumOfNodes}, "w");
@@ -1149,8 +1149,8 @@ void Layer<T>::saveWeights(string file)
 }
 
 
-template <class T>
-Layer<T>::~Layer()
+template <class T, class Tp>
+Layer<T, Tp>::~Layer()
 {
 
     for (size_t i = 0; i < _noOfNodes; i++)
@@ -1190,5 +1190,6 @@ Layer<T>::~Layer()
 #endif
 }
 
-template class Layer<float>;
-template class Layer<bfloat16>;
+template class Layer<float, float>;
+template class Layer<bfloat16, float>;
+template class Layer<bfloat16, bfloat16>;

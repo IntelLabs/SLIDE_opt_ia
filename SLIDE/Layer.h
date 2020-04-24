@@ -16,12 +16,12 @@ enum class WeightsOrder {
   IO = 1
 };
 
-template <class T>
+template <class T, class Tp>
 class Layer
 {
 private:
 	NodeType _type;
-	Node<T>* _Nodes;
+	Node<T, Tp>* _Nodes;
 	int * _randNode;
 	float* _normalizationConstants;
   int _K, _L, _RangeRow, _batchsize;
@@ -32,11 +32,11 @@ public:
 	int _layerID, _noOfActive;
   size_t _previousLayerNumOfNodes;
 	size_t _noOfNodes;
-	float* _weights;
+	Tp* _weights;
   T* _weightGrads;
 	float* _adamAvgMom;
 	float* _adamAvgVel;
-	float* _bias;
+	Tp* _bias;
   T* _biasGrads;
   float* _adamAvgMomBias;
   float* _adamAvgVelBias;
@@ -56,11 +56,11 @@ public:
   SparseRandomProjection *_srp;
   DensifiedWtaHash *_dwtaHasher;
 	int * _binids;
-	Layer(size_t _numNodex, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize, int K, int L, int RangePow, float Sparsity, float* weights=NULL, float* bias=NULL, float *adamAvgMom=NULL, float *adamAvgVel=NULL);
-	Node<T>* getNodebyID(size_t nodeID);
-	Node<T>* getAllNodes();
+	Layer(size_t _numNodex, int previousLayerNumOfNodes, int layerID, NodeType type, int batchsize, int K, int L, int RangePow, float Sparsity, Tp* weights=NULL, Tp* bias=NULL, float *adamAvgMom=NULL, float *adamAvgVel=NULL);
+	Node<T, Tp>* getNodebyID(size_t nodeID);
+	Node<T, Tp>* getAllNodes();
 	int getNodeCount();
-	void addtoHashTable(float* weights, int length, float bias, int id, int stride = 1);
+	void addtoHashTable(Tp* weights, int length, Tp bias, int id, int stride = 1);
 	float getNomalizationConstant(int inputID);
 	int queryActiveNodeandComputeActivations(int** activenodesperlayer, T** activeValuesperlayer, int* inlenght, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
 	int queryActiveNodeandComputeActivationsOpt(int* in_indices, T* in_values, int ICI, int layerID, int inputID,  int* label, int labelsize, float Sparsity, int iter);
@@ -73,7 +73,7 @@ public:
 
   void computeExtraStatsForSoftMaxOpt(int *labels, int labelSize, int inputID, int currentBatchSize);
   void backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt, int inputID, int recordIndex, float tmplr);
-  void backPropagateOpt(Layer<T> *prev_layer, int inputID, float tmplr);
+  void backPropagateOpt(Layer<T, Tp> *prev_layer, int inputID, float tmplr);
 
 
 	~Layer();

@@ -237,8 +237,8 @@ void parseconfig(string filename)
     }
 }
 
-template <class T>
-void EvalDataSVM(int numBatchesTest,  Network<T>* _mynet, int iter){
+template <class T, class Tp>
+void EvalDataSVM(int numBatchesTest,  Network<T, Tp>* _mynet, int iter){
     int totCorrect = 0;
     int debugnumber = 0;
     std::ifstream testfile(testData);
@@ -341,9 +341,9 @@ void EvalDataSVM(int numBatchesTest,  Network<T>* _mynet, int iter){
 
 }
 
-template <class T>
+template <class T, class Tp>
 void EvalDataSVMOpt(DataLayerOpt<T> &testData, int numBatchesTest,
-                    Network<T>* _mynet, int iter){
+                    Network<T, Tp>* _mynet, int iter){
   int totCorrect = 0;
   ofstream outputFile(logFile,  std::ios_base::app);
 
@@ -362,8 +362,8 @@ void EvalDataSVMOpt(DataLayerOpt<T> &testData, int numBatchesTest,
     << totCorrect * 1.0 / (numBatchesTest*Batchsize) << endl;
 }
 
-template <class T>
-void ReadDataSVM(size_t numBatches,  Network<T>* _mynet, int epoch){
+template <class T, class Tp>
+void ReadDataSVM(size_t numBatches,  Network<T, Tp>* _mynet, int epoch){
     std::ifstream file(trainData);
     std::string str;
     //skipe header
@@ -476,9 +476,9 @@ void ReadDataSVM(size_t numBatches,  Network<T>* _mynet, int epoch){
 
 }
 
-template <class T>
+template <class T, class Tp>
 void ReadDataSVMOpt(DataLayerOpt<T> &testData, DataLayerOpt<T> &trainData,
-                    size_t numBatches,  Network<T>* _mynet, int epoch){
+                    size_t numBatches,  Network<T, Tp>* _mynet, int epoch){
   for (size_t i = 0; i < numBatches; i++) {
     if ((i + epoch * numBatches) % Stepsize == 0) {
       EvalDataSVMOpt<T>(testData, 20, _mynet, epoch*numBatches+i);
@@ -513,7 +513,7 @@ void ReadDataSVMOpt(DataLayerOpt<T> &testData, DataLayerOpt<T> &trainData,
   }
 }
 
-template <class T>
+template <class T, class Tp>
 int Execute() {
     //***********************************
     // Initialize Network
@@ -532,7 +532,7 @@ int Execute() {
         arr = cnpy::npz_load(Weights);
     }
     auto t1 = std::chrono::high_resolution_clock::now();
-    Network<T> *_mynet = new Network<T>(sizesOfLayers, layersTypes, numLayer, Batchsize, Lr, InputDim, K, L, RangePow, Sparsity, arr);
+    Network<T, Tp> *_mynet = new Network<T, Tp>(sizesOfLayers, layersTypes, numLayer, Batchsize, Lr, InputDim, K, L, RangePow, Sparsity, arr);
     auto t2 = std::chrono::high_resolution_clock::now();
     float timeDiffInMiliseconds = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
     std::cout << "Network Initialization takes " << timeDiffInMiliseconds/1000 << " milliseconds" << std::endl;
@@ -601,8 +601,13 @@ int main(int argc, char* argv[]) {
 #endif
 
   if (Bfloat16Opt)
-    return Execute<bfloat16>();
+    /*
+      In bfloat16 mode, float32 master weights is needed
+      for accuracy preservation.
+      return Execute<bfloat16, bfloat16>();
+    */
+    return Execute<bfloat16, float>();
   else
-    return Execute<float>();
+    return Execute<float, float>();
 }
 

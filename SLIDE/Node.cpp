@@ -12,8 +12,8 @@
 
 using namespace std;
 
-template <class T>
-Node<T>::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel)
+template <class T, class Tp>
+Node<T, Tp>::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, Tp *weights, Tp bias, float *adamAvgMom, float *adamAvgVel)
 {
 	_dim = dim;
 	_IDinLayer = nodeID;
@@ -38,8 +38,8 @@ Node<T>::Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, fl
 
 }
 
-template <class T>
-void Node<T>::Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, float *weights, float bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob)
+template <class T, class Tp>
+void Node<T, Tp>::Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, Tp *weights, Tp bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob)
 {
     _dim = dim;
     _IDinLayer = nodeID;
@@ -64,8 +64,8 @@ void Node<T>::Update(int dim, int nodeID, int layerID, NodeType type, int batchs
 
 }
 
-template <class T>
-T Node<T>::getLastActivation(int inputID)
+template <class T, class Tp>
+T Node<T, Tp>::getLastActivation(int inputID)
 {
 	if(_train[inputID]._ActiveinputIds != 1)
 		return 0.0;
@@ -73,28 +73,28 @@ T Node<T>::getLastActivation(int inputID)
 }
 
 
-template <class T>
-void Node<T>::incrementDelta(int inputID, T incrementValue)
+template <class T, class Tp>
+void Node<T, Tp>::incrementDelta(int inputID, T incrementValue)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	if (_train[inputID]._lastActivations > 0)
 	    _train[inputID]._lastDeltaforBPs += incrementValue;
 }
 
-template <class T>
-bool Node<T>::getInputActive(int inputID)
+template <class T, class Tp>
+bool Node<T, Tp>::getInputActive(int inputID)
 {
     return _train[inputID]._ActiveinputIds == 1;
 }
 
-template <class T>
-bool Node<T>::getActiveInputs(void)
+template <class T, class Tp>
+bool Node<T, Tp>::getActiveInputs(void)
 {
     return _activeInputs > 0;
 }
 
-template <class T>
-T Node<T>::getActivation(int* indices, T* values, int length, int inputID)
+template <class T, class Tp>
+T Node<T, Tp>::getActivation(int* indices, T* values, int length, int inputID)
 {
 	assert(("Input ID more than Batch Size", inputID <= _currentBatchsize));
 
@@ -138,8 +138,8 @@ T Node<T>::getActivation(int* indices, T* values, int length, int inputID)
 }
 
 
-template <class T>
-void Node<T>::ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, int* label, int labelsize)
+template <class T, class Tp>
+void Node<T, Tp>::ComputeExtaStatsForSoftMax(float normalizationConstant, int inputID, int* label, int labelsize)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds ==1));
 
@@ -155,8 +155,8 @@ void Node<T>::ComputeExtaStatsForSoftMax(float normalizationConstant, int inputI
 	}
 }
 
-template <class T>
-void Node<T>::ComputeExtaStatsForSoftMaxOpt(T &value, T &grad, float normalizationConstant, int inputID, int* label, int labelsize)
+template <class T, class Tp>
+void Node<T, Tp>::ComputeExtaStatsForSoftMaxOpt(T &value, T &grad, float normalizationConstant, int inputID, int* label, int labelsize)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds ==1));
 
@@ -171,8 +171,8 @@ void Node<T>::ComputeExtaStatsForSoftMaxOpt(T &value, T &grad, float normalizati
 	}
 }
 
-template <class T>
-void Node<T>::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
+template <class T, class Tp>
+void Node<T, Tp>::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < previousLayerActiveNodeSize; i++)
@@ -211,8 +211,8 @@ void Node<T>::backPropagate(Node* previousNodes, int* previousLayerActiveNodeIds
 
 }
 
-template <class T>
-void Node<T>::backPropagateOpt(T &value, T &grad, T *prevValues, T *prevGrads, Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
+template <class T, class Tp>
+void Node<T, Tp>::backPropagateOpt(T &value, T &grad, T *prevValues, T *prevGrads, Node* previousNodes, int* previousLayerActiveNodeIds, int previousLayerActiveNodeSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < previousLayerActiveNodeSize; i++)
@@ -255,8 +255,8 @@ void Node<T>::backPropagateOpt(T &value, T &grad, T *prevValues, T *prevGrads, N
 }
 
 
-template <class T>
-void Node<T>::backPropagateFirstLayer(int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID)
+template <class T, class Tp>
+void Node<T, Tp>::backPropagateFirstLayer(int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < nnzSize; i++)
@@ -290,8 +290,8 @@ void Node<T>::backPropagateFirstLayer(int* nnzindices, T* nnzvalues, int nnzSize
     _activeInputs--;
 }
 
-template <class T>
-void Node<T>::backPropagateFirstLayerOpt(T &value, T &grad, int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID)
+template <class T, class Tp>
+void Node<T, Tp>::backPropagateFirstLayerOpt(T &value, T &grad, int* nnzindices, T* nnzvalues, int nnzSize, float learningRate, int inputID)
 {
 	assert(("Input Not Active but still called !! BUG", _train[inputID]._ActiveinputIds == 1));
 	for (int i = 0; i < nnzSize; i++)
@@ -326,14 +326,14 @@ void Node<T>::backPropagateFirstLayerOpt(T &value, T &grad, int* nnzindices, T* 
 }
 
 
-template <class T>
-void Node<T>::SetlastActivation(int inputID, T realActivation)
+template <class T, class Tp>
+void Node<T, Tp>::SetlastActivation(int inputID, T realActivation)
 {
     _train[inputID]._lastActivations = realActivation;
 }
 
-template <class T>
-Node<T>::~Node()
+template <class T, class Tp>
+Node<T, Tp>::~Node()
 {
 
 	delete[] _indicesInTables;
@@ -349,19 +349,20 @@ Node<T>::~Node()
 
 
 // for debugging gradients.
-template <class T>
-T Node<T>::purturbWeight(int weightid, T delta)
+template <class T, class Tp>
+T Node<T, Tp>::purturbWeight(int weightid, T delta)
 {
 	_weights[weightid] += delta;
 	return _weights[weightid];
 }
 
 
-template <class T>
-T Node<T>::getGradient(int weightid, int inputID, T InputVal)
+template <class T, class Tp>
+T Node<T, Tp>::getGradient(int weightid, int inputID, T InputVal)
 {
 	return -_train[inputID]._lastDeltaforBPs * InputVal;
 }
 
-template class Node<float>;
-template class Node<bfloat16>;
+template class Node<float, float>;
+template class Node<bfloat16, float>;
+template class Node<bfloat16, bfloat16>;
