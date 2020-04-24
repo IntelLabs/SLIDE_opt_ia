@@ -34,4 +34,3 @@
 
 #define OPT_IA 1
 #define OPT_VEC512 1
-#define OPT_BF16 1

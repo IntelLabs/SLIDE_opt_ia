@@ -503,7 +503,7 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
       };
 #else
       auto adamWeights = [&](int idx) {
-        float &w = layer->_weights[idx];
+        Tp &w = layer->_weights[idx];
         T &gw = layer->_weightGrads[idx];
         float &mom = layer->_adamAvgMom[idx];
         float &vel = layer->_adamAvgVel[idx];
@@ -516,7 +516,7 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
 
       auto adamBias = [&](int oc) {
         T &gb = layer->_biasGrads[oc];
-        float &b = layer->_bias[oc];
+        Tp &b = layer->_bias[oc];
         float &bmom = layer->_adamAvgMomBias[oc];
         float &bvel = layer->_adamAvgVelBias[oc];
         bmom = BETA1 * bmom + (1 - BETA1) * gb;
