@@ -394,15 +394,29 @@ static inline __m512 _mm512_load_bf16_as_fp32(const void *addr) {
   return _mm512_castsi512_ps(_mm512_bslli_epi128(data, 2));
 }
 
+static inline __m256i _mm512_cvt_fp32_to_bf16_emu_rne(const __m512& src) {
+  __m512i isrc = _mm512_castps_si512(src);
+  __m512i ones = _mm512_set1_epi32(0x1);
+  __m512i bias = _mm512_set1_epi32(0x7fff);
+  // t = (src >> 16) & 1;
+  auto tmp = _mm512_and_si512(_mm512_srli_epi32(isrc, 16), ones);
+  // t = 0x7fff + t;
+  tmp = _mm512_add_epi32(tmp, bias);
+  // t = src + t;
+  tmp = _mm512_add_epi32(tmp, isrc);
+  // t >>= 16;
+  tmp = _mm512_srli_epi32(tmp, 16);
+  return _mm512_cvtepi32_epi16(tmp);
+}
 
 static inline __m256i _mm512_cvt_fp32_to_bf16(__m512 src) {
 #if OPT_CPX_BF16
-  __m256i vec256_val = _mm512_cvtneps_pbh(src);
+  return _mm512_cvtneps_pbh(src);
 #else
-  __m256i vec256_val = _mm512_cvtepi32_epi16(_mm512_bsrli_epi128(
-          _mm512_castps_si512(src), 2));
+  return _mm512_cvt_fp32_to_bf16_emu_rne(src);
+  // truncate
+  //return _mm512_cvtepi32_epi16(_mm512_bsrli_epi128(_mm512_castps_si512(src), 2));
 #endif
-  return vec256_val;
 }
 
 static inline void _mm512_mask_store_fp32_as_bf16(void *addr,
