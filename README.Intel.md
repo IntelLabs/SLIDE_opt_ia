@@ -3,14 +3,16 @@
 ## Prerequisites:
 CMake >= 3.0
 Intel Compiler (ICC) >= 19
-1G HugeTLB enabled
 
 ## Build with ICC compiler
 ```
 source /opt/intel/compilers_and_libraries/linux/bin/compilervars.sh -arch intel64 -platform linux
 cd /path/to/slide-root
 mkdir -p bin && cd bin 
+# SKX/CLX
 cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc -DCMAKE_CXX_FLAGS=-xCore-AVX512 
+# CPX
+cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc -DCMAKE_CXX_FLAGS=-xCore-AVX512 -DOPT_CPX_BF16=1
 make -j
 ```
 
