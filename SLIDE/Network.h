@@ -30,6 +30,8 @@ public:
   int ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchIndex, int iter, bool rehash, bool rebuild);
 	void saveWeights(string file);
 	~Network();
+
+#if !OPT_IA
 	void * operator new(size_t size){
 	    cout << "new Network" << endl;
 	    void* ptr = mmap(NULL, size,
@@ -46,5 +48,6 @@ public:
 	    return ptr;
 	}
 	void operator delete(void * pointer){munmap(pointer, sizeof(Network));};
+#endif
 };
 

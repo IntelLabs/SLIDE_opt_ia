@@ -78,6 +78,7 @@ public:
 
 	~Layer();
 
+#if !OPT_IA
     void * operator new(size_t size){
         cout << "new Layer" << endl;
         void* ptr = mmap(NULL, size,
@@ -92,5 +93,6 @@ public:
             std::cout << "mmap fail! No new layer!" << std::endl;
         return ptr;};
     void operator delete(void * pointer){munmap(pointer, sizeof(Layer));};
+#endif
 
 };
