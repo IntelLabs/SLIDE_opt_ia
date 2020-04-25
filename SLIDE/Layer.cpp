@@ -754,9 +754,9 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
   int OC = _noOfNodes;
 
 #if OPT_IA && OPT_VEC512
-  constexpr int V = 16;
-  constexpr int O = 8;
   if (_weightsOrder == WeightsOrder::IO && OC == OCI) {
+    constexpr int V = 16;
+    constexpr int O = 8;
     int oc2 = (OCI + V - 1) / V;
     int O2 = oc2 / O;
     // TODO: tailing handling
@@ -804,6 +804,8 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
     if (_type == NodeType::Softmax)
       maxValue = _mm512_reduce_max_ps(vec_max);
   } else if (_weightsOrder == WeightsOrder::OI && ICI == IC) {
+#if !OPT_CPX_BF16
+    constexpr int V = 16;
     int I2 = (ICI + V - 1) / V;
     int Vr = ICI % V ? ICI % V : V;
     __m512 vec_max = _mm512_setzero_ps();
@@ -831,6 +833,47 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
       }
       value = res;
     }
+#else
+    constexpr int V = 32;
+    int I2 = (ICI + V - 1) / V;
+    int Vr = ICI % V ? ICI % V : V;
+    __m512 vec_max = _mm512_setzero_ps();
+    __m512 vec_zero = _mm512_setzero_ps();
+
+    for (int oci = 0; oci < OCI; oci++) {
+      T &value = _nodeDataOpt[inputID].values[oci];
+      int oc = _nodeDataOpt[inputID].indices[oci];
+
+      __m512 vec_out = _mm512_setzero_ps();
+      float res = _bias[oc];
+      for (int i2 = 0; i2 < I2; i2++) {
+        uint32_t Vx = i2 == I2 - 1 ? Vr : V;
+        Vx = (1ull << Vx) - 1;
+        __mmask32 k = _cvtu32_mask32(Vx);
+        __m512i vec_wei, vec_in;
+        if (std::is_same<bfloat16, Tp>::value) {
+          vec_wei = _mm512_maskz_loadu_epi16(k, &_weights[oc * IC + i2 * V]);
+        } else {
+          __mmask16 k1 = _cvtu32_mask16((uint16_t)Vx);
+          __mmask16 k2 = _cvtu32_mask16((uint16_t)(Vx >> 16));
+          __m512i vec_t1 =  _mm512_maskz_load_epi32(k1, &_weights[oc * IC + i2 * V]);
+          __m512i vec_t2 =  _mm512_maskz_load_epi32(k2, &_weights[oc * IC + i2 * V + 16]);
+          vec_wei = _mm512_cvtne2ps_pbh(_mm512_castsi512_ps(vec_t2),
+                                        _mm512_castsi512_ps(vec_t1));
+
+        }
+        vec_in = _mm512_maskz_loadu_epi16(k, &in_values[i2 * V]);
+        vec_out = _mm512_dpbf16_ps(vec_out, vec_in, vec_wei);
+      }
+      res = _mm512_reduce_add_ps(vec_out);
+      if (_type == NodeType::ReLU) {
+        if (res < 0) res = 0;
+      } else if (_type == NodeType::Softmax) {
+        if (res > maxValue) maxValue = res;
+      }
+      value = res;
+    }
+#endif
   } else
 #endif
   {
