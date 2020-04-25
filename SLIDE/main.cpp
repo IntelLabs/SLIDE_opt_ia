@@ -607,7 +607,7 @@ int main(int argc, char* argv[]) {
       return Execute<bfloat16, float>();
     case 2:
       cout << "Precision: BFLOAT16 (activation + weights)" << endl;
-      return Execute<bfloat16, float>();
+      return Execute<bfloat16, bfloat16>();
 #endif
     default:
       return 0;
