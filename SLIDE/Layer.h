@@ -40,6 +40,7 @@ public:
   T* _biasGrads;
   float* _adamAvgMomBias;
   float* _adamAvgVelBias;
+  uint16_t* _weightsLo;
   WeightsOrder _weightsOrder = WeightsOrder::OI;
 
   struct NodeDataOpt {

@@ -471,7 +471,16 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
 
         vec_mom = _mm512_maskz_load<float>(k, &layer->_adamAvgMom[idx]);
         vec_vel = _mm512_maskz_load<float>(k, &layer->_adamAvgVel[idx]);
-        vec_w = _mm512_maskz_load<Tp>(k, &layer->_weights[idx]);
+        if (std::is_same<Tp, float>::value) {
+          vec_w = _mm512_maskz_load_ps(k, &layer->_weights[idx]);
+        } else {
+          __m256i vec_w0 = _mm256_maskz_loadu_epi16(k, &layer->_weightsLo[idx]);
+          __m256i vec_w1 = _mm256_maskz_loadu_epi16(k, &layer->_weights[idx]);
+          __m512i vec_ww0 = _mm512_cvtepu16_epi32(vec_w0);
+          __m512i vec_ww1 = _mm512_cvtepu16_epi32(vec_w1);
+          vec_w = _mm512_castsi512_ps(
+              _mm512_or_epi32(vec_ww0, _mm512_bslli_epi128(vec_ww1, 2)));
+        }
         vec_gw = _mm512_maskz_load<T>(k, &layer->_weightGrads[idx]);
 
         vec_mom = vec_BETA1 * vec_mom + (vec_one - vec_BETA1) * vec_gw;
@@ -480,7 +489,15 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
 
         _mm512_mask_store<float>(&layer->_adamAvgMom[idx], k, vec_mom);
         _mm512_mask_store<float>(&layer->_adamAvgVel[idx], k, vec_vel);
-        _mm512_mask_store<Tp>(&layer->_weights[idx], k, vec_w);
+        if (std::is_same<Tp, float>::value) {
+          _mm512_mask_store_ps(&layer->_weights[idx], k, vec_w);
+        } else {
+          _mm256_mask_storeu_epi16(&layer->_weightsLo[idx], k,
+                                   _mm512_cvtepi32_epi16(_mm512_castps_si512(vec_w)));
+          _mm256_mask_storeu_epi16(&layer->_weights[idx], k,
+                                   _mm512_cvtepi32_epi16(
+                                       _mm512_bsrli_epi128(_mm512_castps_si512(vec_w), 2)));
+        }
         _mm512_mask_store<T>(&layer->_weightGrads[idx], k, vec_zero);
       };
       auto vecAdamBias = [&](int Vx, int idx) {
@@ -503,7 +520,15 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
       };
 #else
       auto adamWeights = [&](int idx) {
-        Tp &w = layer->_weights[idx];
+        float w;
+        if (std::is_same<Tp, float>::value) {
+          w = layer->_weights[idx];
+        } else {
+          float_raw f;
+          f.wraw[1] = layer->_weights[idx];
+          f.wraw[0] = layer->_weightsLo[idx];
+          w = f.fraw;
+        }
         T &gw = layer->_weightGrads[idx];
         float &mom = layer->_adamAvgMom[idx];
         float &vel = layer->_adamAvgVel[idx];
@@ -512,6 +537,14 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
         vel = BETA2 * vel + (1 - BETA2) * gw * gw;
         w += ratio * tmplr * mom / (sqrt(vel) + EPS);
         gw = 0;
+        if (std::is_same<Tp, float>::value) {
+          layer->_weights[idx] = w;
+        } else {
+          float_raw f;
+          f.fraw = w;
+          layer->_weights[idx] = f.wraw[1];
+          layer->_weightsLo[idx] = f.wraw[0];
+        }
       };
 
       auto adamBias = [&](int oc) {

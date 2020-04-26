@@ -21,6 +21,13 @@
 #include <cmath>
 #include <iostream>  // required for std::ostream o.w. can give compile error
 
+union float_raw { // helper data type
+  float fraw;
+  uint32_t iraw;
+  uint16_t wraw[2];
+};
+using float_raw = union float_raw;
+
 struct bfloat16 {
   enum class Rounding : uint16_t {
     RNE = 0,
@@ -28,13 +35,6 @@ struct bfloat16 {
   };
 
   uint16_t bits_;
-
-  union float_raw { // helper data type
-    float fraw;
-    uint32_t iraw;
-    uint16_t wraw[2];
-  };
-  using float_raw = union float_raw;
 
   // Default constructor sets initial value to ZERO
   constexpr bfloat16(): bits_{0} { }
@@ -327,7 +327,7 @@ inline bool isfinite(const bfloat16& x) { return !(isnan(x) || isinf(x)); }
 // extra operators
 inline bfloat16& operator++(bfloat16& x) { // prefix increment
 
-  bfloat16::float_raw r;
+  float_raw r;
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
   r.wraw[1] = 0;
   r.wraw[0] = x.bits_;
@@ -348,7 +348,7 @@ inline bfloat16 operator++(bfloat16& x, int unused) { // postfix increment
 
 inline bfloat16& operator--(bfloat16& x) { // prefix decrement
 
-  bfloat16::float_raw r;
+  float_raw r;
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
   r.wraw[1] = 0;
   r.wraw[0] = x.bits_;
@@ -370,7 +370,7 @@ inline bfloat16 operator--(bfloat16& x, int unused) { // postfix decrement
 // We have the std::ostream& operator<< version (see below - the namespace std section)
 // inline dpcpp::ostream& operator<< (dpcpp::ostream &out, const bfloat16 &bf){
 //     // BDEBUG("-friend in dpcpp - Using << overloading");
-//     bfloat16::float_raw f;
+//     float_raw f;
 //     f.wraw[1] = bf.bits_;
 //     f.wraw[0] = 0;
 
