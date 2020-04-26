@@ -479,7 +479,7 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
           __m512i vec_ww0 = _mm512_cvtepu16_epi32(vec_w0);
           __m512i vec_ww1 = _mm512_cvtepu16_epi32(vec_w1);
           vec_w = _mm512_castsi512_ps(
-              _mm512_or_epi32(vec_ww0, _mm512_bslli_epi128(vec_ww1, 2)));
+              _mm512_or_si512(vec_ww0, _mm512_bslli_epi128(vec_ww1, 2)));
         }
         vec_gw = _mm512_maskz_load<T>(k, &layer->_weightGrads[idx]);
 
@@ -506,8 +506,17 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
 
         vec_mom = _mm512_maskz_load<float>(k, &layer->_adamAvgMomBias[idx]);
         vec_vel = _mm512_maskz_load<float>(k, &layer->_adamAvgVelBias[idx]);
-        vec_b = _mm512_maskz_load<Tp>(k, &layer->_bias[idx]);
         vec_gb = _mm512_maskz_load<T>(k, &layer->_biasGrads[idx]);
+        if (std::is_same<Tp, float>::value) {
+          vec_b = _mm512_maskz_load_ps(k, &layer->_bias[idx]);
+        } else {
+          __m256i vec_b0 = _mm256_maskz_loadu_epi16(k, &layer->_biasLo[idx]);
+          __m256i vec_b1 = _mm256_maskz_loadu_epi16(k, &layer->_bias[idx]);
+          __m512i vec_bb0 = _mm512_cvtepu16_epi32(vec_b0);
+          __m512i vec_bb1 = _mm512_cvtepu16_epi32(vec_b1);
+          vec_b = _mm512_castsi512_ps(
+              _mm512_or_si512(vec_bb0, _mm512_bslli_epi128(vec_bb1, 2)));
+        }
 
         vec_mom = vec_BETA1 * vec_mom + (vec_one - vec_BETA1) * vec_gb;
         vec_vel = vec_BETA2 * vec_vel + (vec_one - vec_BETA2) * vec_gb * vec_gb;
@@ -515,7 +524,15 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
 
         _mm512_mask_store<float>(&layer->_adamAvgMomBias[idx], k, vec_mom);
         _mm512_mask_store<float>(&layer->_adamAvgVelBias[idx], k, vec_vel);
-        _mm512_mask_store<Tp>(&layer->_bias[idx], k, vec_b);
+        if (std::is_same<Tp, float>::value) {
+          _mm512_mask_store_ps(&layer->_bias[idx], k, vec_b);
+        } else {
+          _mm256_mask_storeu_epi16(&layer->_biasLo[idx], k,
+                                   _mm512_cvtepi32_epi16(_mm512_castps_si512(vec_b)));
+          _mm256_mask_storeu_epi16(&layer->_bias[idx], k,
+                                   _mm512_cvtepi32_epi16(
+                                       _mm512_bsrli_epi128(_mm512_castps_si512(vec_b), 2)));
+        }
         _mm512_mask_store<T>(&layer->_biasGrads[idx], k, vec_zero);
       };
 #else
@@ -548,14 +565,31 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
       };
 
       auto adamBias = [&](int oc) {
+        float b;
         T &gb = layer->_biasGrads[oc];
-        Tp &b = layer->_bias[oc];
+        if (std::is_same<Tp, float>::value) {
+          b = layer->_bias[oc];
+        } else {
+          float_raw f;
+          f.wraw[1] = layer->_bias[idx];
+          f.wraw[0] = layer->_biasLo[idx];
+          b = f.fraw;
+        }
+
         float &bmom = layer->_adamAvgMomBias[oc];
         float &bvel = layer->_adamAvgVelBias[oc];
         bmom = BETA1 * bmom + (1 - BETA1) * gb;
         bvel = BETA2 * bvel + (1 - BETA2) * gb * gb;
         b += ratio * tmplr * bmom / (sqrt(bvel) + EPS);
         gb = 0;
+        if (std::is_same<Tp, float>::value) {
+          layer->_bias[idx] = w;
+        } else {
+          float_raw f;
+          f.fraw = b;
+          layer->_bias[idx] = f.wraw[1];
+          layer->_biasLo[idx] = f.wraw[0];
+        }
       };
 #endif
 

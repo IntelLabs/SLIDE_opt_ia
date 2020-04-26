@@ -85,7 +85,8 @@ Layer<T, Tp>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, 
         _bias = (Tp *)aligned_alloc(64, sizeof(Tp) * _noOfNodes);
 #if OPT_IA
         if (std::is_same<Tp, bfloat16>::value) {
-            _weightsLo = (uint16_t *)aligned_alloc(64, sizeof(short) * _noOfNodes * previousLayerNumOfNodes);
+            _weightsLo = (uint16_t *)aligned_alloc(64, sizeof(uint16_t) * _noOfNodes * previousLayerNumOfNodes);
+            _biasLo = (uint16_t *)aligned_alloc(64, sizeof(uint16_t) * _noOfNodes);
         }
         _weightGrads =  (T *)aligned_alloc(64, sizeof(T) * _noOfNodes * previousLayerNumOfNodes);
         _biasGrads = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
@@ -107,7 +108,20 @@ Layer<T, Tp>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, 
             }
 #endif
         }
-        generate(_bias, _bias + _noOfNodes, [&] () { return Tp(distribution(dre)); });
+        for (int i = 0; i < _noOfNodes; i++) {
+            float v = distribution(dre);
+            if (std::is_same<Tp, float>::value)
+                _bias[i] = v;
+#if OPT_IA
+            else { // bf16
+                float_raw r;
+                r.fraw = v;
+                *(uint16_t*)&_bias[i] = r.wraw[1];
+                _biasLo[i] = r.wraw[0];
+            }
+#endif
+
+        }
 
         if (ADAM)
         {
@@ -1211,6 +1225,7 @@ Layer<T, Tp>::~Layer()
     free(_weightGrads);
     free(_biasGrads);
     free(_weightsLo);
+    free(_biasLo);
     delete[] _nodeDataOpt;
 #endif
 

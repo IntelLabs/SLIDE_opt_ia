@@ -41,6 +41,7 @@ public:
   float* _adamAvgMomBias;
   float* _adamAvgVelBias;
   uint16_t* _weightsLo;
+  uint16_t* _biasLo;
   WeightsOrder _weightsOrder = WeightsOrder::OI;
 
   struct NodeDataOpt {
