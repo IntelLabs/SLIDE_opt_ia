@@ -92,11 +92,11 @@ Layer<T, Tp>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, 
         _biasGrads = (T *)aligned_alloc(64, sizeof(T) * _noOfNodes);
 #endif
         random_device rd;
-        default_random_engine dre(rd());
+        std::mt19937 re(rd());
         normal_distribution<float> distribution(0.0, 0.01);
 
         for (int i = 0; i < _noOfNodes * previousLayerNumOfNodes; i++) {
-            float v = distribution(dre);
+            float v = distribution(re);
             if (std::is_same<Tp, float>::value)
                 _weights[i] = v;
 #if OPT_IA
@@ -109,7 +109,7 @@ Layer<T, Tp>::Layer(size_t noOfNodes, int previousLayerNumOfNodes, int layerID, 
 #endif
         }
         for (int i = 0; i < _noOfNodes; i++) {
-            float v = distribution(dre);
+            float v = distribution(re);
             if (std::is_same<Tp, float>::value)
                 _bias[i] = v;
 #if OPT_IA
