@@ -61,7 +61,7 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
     // binsize is the number of times the range is larger than the total number of hashes we need.
 
     int *hashes = new int[_numhashes];
-    T *values = new T[_numhashes];
+    float *values = new float[_numhashes];
     int *hashArray = new int[_numhashes];
 
     for (int i = 0; i < _numhashes; i++)
@@ -70,17 +70,35 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
         values[i] = INT_MIN;
     }
 
-    for (int p=0; p< _permute; p++) {
+    constexpr int V = 16;
+    // TODO: tail handling
+    if (stride == 1 && dataLen % V == 0) {
+      __m512i vec_numhashes = _mm512_set1_epi32(_numhashes);
+      for (int p = 0; p < _permute; p++) {
+        for (int i = 0; i < dataLen / V; i++) {
+          __m512i vec_binid = _mm512_load_epi32(&_indices[p * _rangePow + i * V]);
+          __m512i vec_pos = _mm512_load_epi32(&_pos[p * _rangePow + i * V]);
+          __m512 vec_data = _mm512_load<T>(&data[i * V]);
+          __mmask16 k1 = _mm512_cmpge_epi32_mask(vec_numhashes, vec_binid);
+          __m512 vec_binval = _mm512_i32gather_ps(vec_binid, values, sizeof(float));
+          __mmask16 k2 = _mm512_mask_cmp_ps_mask(k1, vec_data, vec_binval, _CMP_GE_OQ);
+          _mm512_mask_i32scatter_ps(values, k2, vec_binid, vec_data, sizeof(float));
+          _mm512_mask_i32scatter_epi32(hashes, k2, vec_binid, vec_pos, sizeof(int));
+        }
+      }
+    } else {
+      for (int p=0; p< _permute; p++) {
         int bin_index = p * _rangePow;
         for (int i = 0; i < dataLen; i++) {
-            int inner_index = bin_index + i;
-            int binid = _indices[inner_index];
-            T loc_data = data[i * stride];
-            if(binid < _numhashes && values[binid] < loc_data) {
-                values[binid] = loc_data;
-                hashes[binid] = _pos[inner_index];
-            }
+          int inner_index = bin_index + i;
+          int binid = _indices[inner_index];
+          T loc_data = data[i * stride];
+          if(binid < _numhashes && values[binid] < loc_data) {
+            values[binid] = loc_data;
+            hashes[binid] = _pos[inner_index];
+          }
         }
+      }
     }
 
     for (int i = 0; i < _numhashes; i++)
