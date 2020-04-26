@@ -631,9 +631,9 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
     t3 = std::chrono::high_resolution_clock::now();
   if (DEBUG && rehash) {
     float timeDiffInMiliseconds1 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
-    std::cout << "Training: FWD/BWD takes " << timeDiffInMiliseconds1/1000 << " milliseconds, ";
+    std::cout << "FWD/BWD takes " << timeDiffInMiliseconds1/1000 << " ms, ";
     float timeDiffInMiliseconds2 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count();
-    std::cout << "ADAM takes " << timeDiffInMiliseconds2/1000 << " milliseconds" << std::endl;
+    std::cout << "ADAM/rehash takes " << timeDiffInMiliseconds2/1000 << " ms" << std::endl;
 
     cout << "Avg sample size = " << avg_retrieval[0]*1.0/_currentBatchSize<<" "<<avg_retrieval[1]*1.0/_currentBatchSize << endl;
   }
