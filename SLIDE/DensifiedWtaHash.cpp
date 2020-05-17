@@ -72,6 +72,9 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
 
     constexpr int V = 16;
     // TODO: tail handling
+#if OPT_VEC512_PERM
+    // Disable this opt because it slightly impacts accuracy due to dup indices
+    // in the vector that needs special handling
     if (stride == 1 && dataLen % V == 0) {
       __m512i vec_numhashes = _mm512_set1_epi32(_numhashes);
       for (int p = 0; p < _permute; p++) {
@@ -86,7 +89,9 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
           _mm512_mask_i32scatter_epi32(hashes, k2, vec_binid, vec_pos, sizeof(int));
         }
       }
-    } else {
+    } else
+#endif
+    {
       for (int p=0; p< _permute; p++) {
         int bin_index = p * _rangePow;
         for (int i = 0; i < dataLen; i++) {
