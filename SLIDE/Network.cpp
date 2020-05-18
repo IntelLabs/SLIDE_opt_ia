@@ -571,8 +571,8 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
           b = layer->_bias[oc];
         } else {
           float_raw f;
-          f.wraw[1] = layer->_bias[idx];
-          f.wraw[0] = layer->_biasLo[idx];
+          f.wraw[1] = layer->_bias[oc];
+          f.wraw[0] = layer->_biasLo[oc];
           b = f.fraw;
         }
 
@@ -583,12 +583,12 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
         b += ratio * tmplr * bmom / (sqrt(bvel) + EPS);
         gb = 0;
         if (std::is_same<Tp, float>::value) {
-          layer->_bias[idx] = w;
+          layer->_bias[oc] = b;
         } else {
           float_raw f;
           f.fraw = b;
-          layer->_bias[idx] = f.wraw[1];
-          layer->_biasLo[idx] = f.wraw[0];
+          layer->_bias[oc] = f.wraw[1];
+          layer->_biasLo[oc] = f.wraw[0];
         }
       };
 #endif
