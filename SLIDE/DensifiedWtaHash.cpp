@@ -72,9 +72,6 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
 
     constexpr int V = 16;
     // TODO: tail handling
-#if OPT_VEC512_PERM
-    // Disable this opt because it slightly impacts accuracy due to dup indices
-    // in the vector that needs special handling
     if (stride == 1 && dataLen % V == 0) {
       __m512i vec_numhashes = _mm512_set1_epi32(_numhashes);
       for (int p = 0; p < _permute; p++) {
@@ -82,16 +79,21 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
           __m512i vec_binid = _mm512_load_epi32(&_indices[p * _rangePow + i * V]);
           __m512i vec_pos = _mm512_load_epi32(&_pos[p * _rangePow + i * V]);
           __m512 vec_data = _mm512_load<T>(&data[i * V]);
-          __mmask16 k1 = _mm512_cmpge_epi32_mask(vec_numhashes, vec_binid);
+          __mmask16 k1 = _mm512_cmpgt_epi32_mask(vec_numhashes, vec_binid);
+
           __m512 vec_binval = _mm512_i32gather_ps(vec_binid, values, sizeof(float));
-          __mmask16 k2 = _mm512_mask_cmp_ps_mask(k1, vec_data, vec_binval, _CMP_GE_OQ);
+          __mmask16 k2 = _mm512_mask_cmp_ps_mask(k1, vec_data, vec_binval, _CMP_GT_OQ);
+          _mm512_mask_i32scatter_ps(values, k2, vec_binid, vec_data, sizeof(float));
+          _mm512_mask_i32scatter_epi32(hashes, k2, vec_binid, vec_pos, sizeof(int));
+
+          // Rerun and de-dup
+          vec_binval = _mm512_i32gather_ps(vec_binid, values, sizeof(float));
+          k2 = _mm512_mask_cmp_ps_mask(k1, vec_data, vec_binval, _CMP_GT_OQ);
           _mm512_mask_i32scatter_ps(values, k2, vec_binid, vec_data, sizeof(float));
           _mm512_mask_i32scatter_epi32(hashes, k2, vec_binid, vec_pos, sizeof(int));
         }
       }
-    } else
-#endif
-    {
+    } else {
       for (int p=0; p< _permute; p++) {
         int bin_index = p * _rangePow;
         for (int i = 0; i < dataLen; i++) {
