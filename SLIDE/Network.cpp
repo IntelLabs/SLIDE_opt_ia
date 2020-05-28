@@ -452,7 +452,7 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
     size_t IC = _hiddenlayers[l]->_previousLayerNumOfNodes;
     bool isOIWeights = _hiddenlayers[l]->_weightsOrder == WeightsOrder::OI;
     if (ADAM) {
-#if OPT_IA && OPT_VEC512
+#if OPT_IA && OPT_AVX512
       constexpr int V = 16;
       int I2 = (IC + V - 1) / V;
       int O2 = (OC + V - 1) / V;
@@ -593,7 +593,7 @@ int Network<T, Tp>::ProcessInputOpt(DataLayerOpt<T> &dataLayerOpt, size_t batchI
       };
 #endif
 
-#if OPT_IA && OPT_VEC512
+#if OPT_IA && OPT_AVX512
       if (isOIWeights) {
         #pragma omp parallel for
         for (size_t oc = 0; oc < OC; oc++) {

@@ -70,6 +70,7 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
         values[i] = INT_MIN;
     }
 
+#if OPT_IA && OPT_AVX512
     constexpr int V = 16;
     // TODO: tail handling
     if (stride == 1 && dataLen % V == 0) {
@@ -93,7 +94,9 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
           _mm512_mask_i32scatter_epi32(hashes, k2, vec_binid, vec_pos, sizeof(int));
         }
       }
-    } else {
+    } else
+#endif
+    {
       for (int p=0; p< _permute; p++) {
         int bin_index = p * _rangePow;
         for (int i = 0; i < dataLen; i++) {

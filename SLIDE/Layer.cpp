@@ -782,7 +782,7 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
   int IC = _previousLayerNumOfNodes;
   int OC = _noOfNodes;
 
-#if OPT_IA && OPT_VEC512
+#if OPT_IA && OPT_AVX512
   if (_weightsOrder == WeightsOrder::IO && OC == OCI) {
     constexpr int V = 16;
     constexpr int O = 8;
@@ -833,7 +833,7 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
     if (_type == NodeType::Softmax)
       maxValue = _mm512_reduce_max_ps(vec_max);
   } else if (_weightsOrder == WeightsOrder::OI && ICI == IC) {
-#if OPT_CPX_BF16
+#if OPT_AVX512_BF16
     if (std::is_same<bfloat16, T>::value) {
       constexpr int V = 32;
       int I2 = (ICI + V - 1) / V;
@@ -938,7 +938,7 @@ int Layer<T, Tp>::queryActiveNodeandComputeActivationsOpt(
   }
 
   if(_type == NodeType::Softmax) {
-#if OPT_IA && OPT_VEC512
+#if OPT_IA && OPT_AVX512
     constexpr int V = 16;
     int O2 = (OCI + V - 1) / V;
     int Vr = OCI % V ? OCI % V : V;
@@ -981,7 +981,7 @@ void Layer<T, Tp>::backPropagateFirstLayerOpt(DataLayerOpt<T> &dataLayerOpt,
   int IC = _previousLayerNumOfNodes;
   bool isOIWeights = _weightsOrder == WeightsOrder::OI;
 
-#if OPT_IA && OPT_VEC512
+#if OPT_IA && OPT_AVX512
   if (!isOIWeights && ADAM) {
     constexpr int V = 16;
     int O2 = (OCI + V - 1) / V;
@@ -1050,7 +1050,7 @@ void Layer<T, Tp>::backPropagateOpt(Layer<T, Tp> *prev_layer, int inputID, float
   T *prevValues = prev_layer->_nodeDataOpt[inputID].values;
   T *prevGrads = prev_layer->_nodeDataOpt[inputID].grads;
 
-#if OPT_IA && OPT_VEC512
+#if OPT_IA && OPT_AVX512
   if (isOIWeights && ICI == IC && ADAM) {
     constexpr int V = 16;
     constexpr int I = 8;
@@ -1141,7 +1141,7 @@ void Layer<T, Tp>::computeExtraStatsForSoftMaxOpt(int *labels,
                                               int inputID,
                                               int currentBatchSize) {
   int OCI = _nodeDataOpt[inputID].size;
-#if OPT_IA && OPT_VEC512
+#if OPT_IA && OPT_AVX512
   constexpr int V = 16;
   int O2 = (OCI + V - 1) / V;
   int Vr = OCI % V ? OCI % V : V;

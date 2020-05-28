@@ -9,10 +9,12 @@ Intel Compiler (ICC) >= 19
 source /opt/intel/compilers_and_libraries/linux/bin/compilervars.sh -arch intel64 -platform linux
 cd /path/to/slide-root
 mkdir -p bin && cd bin 
-# SKX/CLX
-cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc -DCMAKE_CXX_FLAGS=-xCore-AVX512 
-# CPX
-cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc -DCMAKE_CXX_FLAGS=-xCore-AVX512 -DOPT_CPX_BF16=1
+# BDW (AVX2)
+cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc
+# SKX/CLX (AVX512)
+cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc -DOPT_AVX512=1
+# CPX (AVX512 + BF16)
+cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc -DOPT_AVX512=1 -DOPT_AVX512_BF16=1
 make -j
 ```
 

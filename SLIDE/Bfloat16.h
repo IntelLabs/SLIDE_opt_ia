@@ -410,7 +410,7 @@ static inline __m256i _mm512_cvt_fp32_to_bf16_emu_rne(const __m512& src) {
 }
 
 static inline __m256i _mm512_cvt_fp32_to_bf16(__m512 src) {
-#if OPT_CPX_BF16
+#if OPT_AVX512_BF16
   return _mm512_cvtneps_pbh(src);
 #else
   return _mm512_cvt_fp32_to_bf16_emu_rne(src);
