@@ -87,11 +87,17 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
           _mm512_mask_i32scatter_ps(values, k2, vec_binid, vec_data, sizeof(float));
           _mm512_mask_i32scatter_epi32(hashes, k2, vec_binid, vec_pos, sizeof(int));
 
-          // Rerun and de-dup
+          // Rerun and de-dup twice
           vec_binval = _mm512_i32gather_ps(vec_binid, values, sizeof(float));
           k2 = _mm512_mask_cmp_ps_mask(k1, vec_data, vec_binval, _CMP_GT_OQ);
           _mm512_mask_i32scatter_ps(values, k2, vec_binid, vec_data, sizeof(float));
           _mm512_mask_i32scatter_epi32(hashes, k2, vec_binid, vec_pos, sizeof(int));
+
+          vec_binval = _mm512_i32gather_ps(vec_binid, values, sizeof(float));
+          k2 = _mm512_mask_cmp_ps_mask(k1, vec_data, vec_binval, _CMP_GT_OQ);
+          _mm512_mask_i32scatter_ps(values, k2, vec_binid, vec_data, sizeof(float));
+          _mm512_mask_i32scatter_epi32(hashes, k2, vec_binid, vec_pos, sizeof(int));
+
         }
       }
     } else
