@@ -63,6 +63,7 @@ void LSH::count()
 
 int* LSH::hashesToIndex(int * hashes)
 {
+  const int logbinsize = (int)floor(log2(binsize));
 
 	int * indices = new int[_L];
 	for (int i = 0; i < _L; i++)
@@ -77,7 +78,7 @@ int* LSH::hashesToIndex(int * hashes)
 				index += h<<(_K-1-j);
 			}else if (HashFunction==1 | HashFunction==2){
                 unsigned int h = hashes[_K*i + j];
-                index += h<<((_K-1-j)*(int)floor(log(binsize)));
+                index += h<<((_K-1-j) * logbinsize);
 
             }else {
                 unsigned int h = rand1[_K*i + j];
@@ -109,6 +110,7 @@ int* LSH::add(int *indices, int id)
 }
 
 void LSH::hashesToIndexAddOpt(int * hashes, int id) {
+  const int logbinsize = (int)floor(log2(binsize));
   for (int i = 0; i < _L; i++) {
     unsigned int index = 0;
 
@@ -118,7 +120,7 @@ void LSH::hashesToIndexAddOpt(int * hashes, int id) {
         index += h<<(_K-1-j);
       } else if (HashFunction==1 | HashFunction==2){
         unsigned int h = hashes[_K*i + j];
-        index += h<<((_K-1-j)*(int)floor(log(binsize)));
+        index += h<<((_K-1-j)*logbinsize);
       } else {
         unsigned int h = rand1[_K*i + j];
         h *= rand1[_K * i + j];
