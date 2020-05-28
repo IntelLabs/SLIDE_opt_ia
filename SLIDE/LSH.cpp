@@ -38,12 +38,14 @@ LSH::LSH(int K, int L, int RangePow)
 
 void LSH::clear()
 {
-//#pragma omp parallel for
-    for (int i = 0; i < _L; i++) {
-        _bucket[i]->reset();
+  auto size = (1 << _RangePow);
+#pragma omp parallel for collapse(2)
+  for (int i = 0; i < _L; i++) {
+    for (int j = 0; j < size; j++) {
+      _bucket[i][j].reset();
     }
+  }
 }
-
 
 void LSH::count()
 {
