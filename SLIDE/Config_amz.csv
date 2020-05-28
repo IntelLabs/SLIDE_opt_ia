@@ -1,10 +1,10 @@
-RangePow = 6,18
-K = 2,6
-L = 20,50
+RangePow = 6,15
+K = 2,5
+L = 20,256
 Sparsity = 1,0.005,1,1
 
-Batchsize=416
-Rehash=6400
+Batchsize=1024
+Rehash=12800
 Rebuild=128000
 InputDim=135909
 totRecords=490449
@@ -28,4 +28,4 @@ logFile=../dataset/log.txt
 # 0: off
 # 1: bfloat16 activation + float32 master weights
 # 2: bfloat16 activation and weights
-Bfloat16Opt=2
+Bfloat16Opt=0
