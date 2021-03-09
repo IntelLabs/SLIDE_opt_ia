@@ -12,6 +12,8 @@ SparseRandomProjection::SparseRandomProjection(size_t dimension, size_t numOfHas
     _samSize = ceil(1.0*_dim / ratio);
 
     int *a = new int[_dim];
+    memset (a, 0, sizeof(int) * _dim);
+    
     for (size_t i = 0; i < _dim; i++) {
         a[i] = i;
     }
@@ -40,7 +42,7 @@ SparseRandomProjection::SparseRandomProjection(size_t dimension, size_t numOfHas
 
 
 template <class T>
-int *SparseRandomProjection::getHash<T>(T *vector, int length) {
+int *SparseRandomProjection::getHash(T *vector, int length) {
     // length should be = to _dim
     int *hashes = new int[_numhashes];
 
@@ -62,7 +64,7 @@ int *SparseRandomProjection::getHash<T>(T *vector, int length) {
 
 
 template <class T>
-int *SparseRandomProjection::getHashSparse<T>(int* indices, T *values, size_t length) {
+int *SparseRandomProjection::getHashSparse(int* indices, T *values, size_t length) {
     int *hashes = new int[_numhashes];
 
     for (size_t p = 0; p < _numhashes; p++) {

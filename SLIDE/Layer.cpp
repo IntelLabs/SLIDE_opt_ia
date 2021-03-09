@@ -1206,13 +1206,13 @@ template <class T, class Tp>
 Layer<T, Tp>::~Layer()
 {
 
-    for (size_t i = 0; i < _noOfNodes; i++)
-    {
+    // for (size_t i = 0; i < _noOfNodes; i++)
+    // {
         if (_type == NodeType::Softmax)
         {
             delete[] _normalizationConstants;
         }
-    }
+    // }
 
 #if OPT_IA
     for (int i = 0; i < _batchsize; i++) {

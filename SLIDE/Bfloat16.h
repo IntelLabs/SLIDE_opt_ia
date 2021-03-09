@@ -34,7 +34,7 @@ struct bfloat16 {
     TRUNC = 1
   };
 
-  uint16_t bits_;
+  uint16_t bits_ = 0;
 
   // Default constructor sets initial value to ZERO
   constexpr bfloat16(): bits_{0} { }

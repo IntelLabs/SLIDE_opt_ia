@@ -24,7 +24,7 @@ struct DataLayerOpt {
   std::vector<int> labelLengths_;
   std::vector<int> labels_;
 
-  DataLayerOpt() {}
+  DataLayerOpt() numRecords_{0}, numFeatures_ {0}, numLabels_ {0} {};
   void loadData(const std::string &srcFile);
 
   inline int lengthByRecordIndex(size_t n) {
