@@ -89,7 +89,7 @@ public:
 	float _adamAvgVelbias=0;
 	float _mirrorbias =0;
 
-	Node(){};
+	Node() : _train{nullptr}, _dim{0}, _layerNum{0}, _IDinLayer{0} {};
 	Node(int dim, int nodeID, int layerID, NodeType type, int batchsize, Tp *weights, Tp bias, float *adamAvgMom, float *adamAvgVel);
 	void Update(int dim, int nodeID, int layerID, NodeType type, int batchsize, Tp *weights, Tp bias, float *adamAvgMom, float *adamAvgVel, train<T>* train_blob);
 	void updateWeights(T* newWeights, T newbias);

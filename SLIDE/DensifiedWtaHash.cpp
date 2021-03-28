@@ -56,13 +56,16 @@ DensifiedWtaHash::DensifiedWtaHash(int numHashes, int noOfBitsToHash)
 
 
 template <class T>
-int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int stride)
+int * DensifiedWtaHash::getHashEasy(T* data, int dataLen, int topk, int stride)
 {
     // binsize is the number of times the range is larger than the total number of hashes we need.
 
-    int *hashes = new int[_numhashes];
-    float *values = new float[_numhashes];
-    int *hashArray = new int[_numhashes];
+    int *hashes = new int[_numhashes] {0};
+    memset(hashes, 0, sizeof(int) * _numhashes);
+    float *values = new float[_numhashes] {0};
+    memset(values, 0, sizeof(float) * _numhashes);
+    int *hashArray = new int[_numhashes] {0};
+    memset(hashArray, 0, sizeof(int) * _numhashes);
 
     for (int i = 0; i < _numhashes; i++)
     {
@@ -145,11 +148,14 @@ int * DensifiedWtaHash::getHashEasy<T>(T* data, int dataLen, int topk, int strid
 }
 
 template <class T>
-int* DensifiedWtaHash::getHash<T>(int* indices, T* data, int dataLen)
+int* DensifiedWtaHash::getHash(int* indices, T* data, int dataLen)
 {
-    int *hashes = new int[_numhashes];
-    T *values = new T[_numhashes];
-    int *hashArray = new int[_numhashes];
+    int *hashes = new int[_numhashes] {0};
+    memset(hashes, 0, sizeof(int) * _numhashes);
+    float *values = new float[_numhashes] {0};
+    memset(values, 0, sizeof(float) * _numhashes);
+    int *hashArray = new int[_numhashes] {0};
+    memset(hashArray, 0, sizeof(int) * _numhashes);
 
     // init hashes and values to INT_MIN to start
     for (int i = 0; i < _numhashes; i++)
@@ -213,9 +219,11 @@ DensifiedWtaHash::~DensifiedWtaHash()
 }
 
 
+template int* DensifiedWtaHash::getHashEasy<int>(int* data, int dataLen, int topk, int stride);
 template int* DensifiedWtaHash::getHashEasy<float>(float* data, int dataLen, int topk, int stride);
 template int* DensifiedWtaHash::getHashEasy<bfloat16>(bfloat16* data, int dataLen, int topk, int stride);
 
+template int* DensifiedWtaHash::getHash<int>(int* indices, int* data, int dataLen);
 template int* DensifiedWtaHash::getHash<float>(int* indices, float* data, int dataLen);
 template int* DensifiedWtaHash::getHash<bfloat16>(int* indices, bfloat16* data, int dataLen);
 

@@ -20,10 +20,10 @@
 #include "Config.h"
 #include "DataLayerOpt.h"
 
-int *RangePow;
-int *K;
-int *L;
-float *Sparsity;
+int *RangePow = NULL;
+int *K = NULL;
+int *L = NULL;
+float *Sparsity = NULL;
 
 
 int Batchsize = 1000;
@@ -35,7 +35,7 @@ int totRecordsTest = 10000;
 float Lr = 0.0001;
 int Epoch = 5;
 int Stepsize = 20;
-int *sizesOfLayers;
+int *sizesOfLayers = NULL;
 int numLayer = 3;
 int Bfloat16Opt = 1;
 string trainData = "";
@@ -186,6 +186,9 @@ void parseconfig(string filename)
         else if (trim(first) == "numLayer")
         {
             numLayer = atoi(trim(second).c_str());
+            if (numLayer >= MAX_BUFFER_SIZE) {
+                numLayer = MAX_BUFFER_SIZE;
+            }
         }
         else if (trim(first) == "logFile")
         {
@@ -579,6 +582,8 @@ int Execute() {
     delete [] K;
     delete [] L;
     delete [] Sparsity;
+    delete _mynet;
+    delete sizesOfLayers;
 
     return 0;
 
@@ -598,8 +603,8 @@ int main(int argc, char* argv[]) {
 
   switch (Bfloat16Opt) {
     case 0:
-      cout << "Precision: FP32" << endl;
-      return Execute<float, float>();
+    cout << "Precision: FP32" << endl;
+    return Execute<float, float>();
 #if OPT_IA
     case 1:
       // FP32 master weights is needed for accuracy preservation.

@@ -1,4 +1,5 @@
 #include "DensifiedMinhash.h"
+#include "Bfloat16.h"
 #include <random>
 #include <iostream>
 #include <math.h>
@@ -6,7 +7,6 @@
 #include <climits>
 #include <algorithm>
 #include <queue>
-#include "Bfloat16.h"
 using namespace std;
 
 template <class T> using PAIR = pair<int, T>;
@@ -62,15 +62,14 @@ void DensifiedMinhash::getMap(int n, int* binids)
 
 }
 
-
-template <class T>
-int * DensifiedMinhash::getHashEasy<T>(int* binids, T* data, int dataLen, int topK)
+template <class B>
+int * DensifiedMinhash::getHashEasy(int* binids, B* data, int dataLen, int topK)
 {
 
     // binsize is the number of times the range is larger than the total number of hashes we need.
 // read the data and add it to priority queue O(dlogk approx 7d) with index as key and values as priority value, get topk index O(1) and apply minhash on retuned index.
 
-    priority_queue<PAIR<T>, vector<PAIR<T> >, cmp<T>> pq;
+    priority_queue<PAIR<B>, vector<PAIR<B> >, cmp<B>> pq;
 
     for (int i = 0; i < topK; i++)
     {
@@ -86,6 +85,7 @@ int * DensifiedMinhash::getHashEasy<T>(int* binids, T* data, int dataLen, int to
 
 
     int *hashes = new int[_numhashes];
+    memset(hashes, 0, sizeof(int) * _numhashes);
     //float *values = new float[_numhashes];
     int *hashArray = new int[_numhashes];
 
@@ -97,7 +97,7 @@ int * DensifiedMinhash::getHashEasy<T>(int* binids, T* data, int dataLen, int to
 
     for (int i = 0; i < topK; i++)
     {
-        PAIR<T> pair = pq.top();
+        PAIR<B> pair = pq.top();
         pq.pop();
         int index = pair.first;
         int binid = binids[index];
@@ -134,9 +134,11 @@ int * DensifiedMinhash::getHashEasy<T>(int* binids, T* data, int dataLen, int to
 }
 
 template <class T>
-int * DensifiedMinhash::getHash<T>(int* indices, T* data, int* binids, int dataLen)
+int * DensifiedMinhash::getHash(int* indices, T* data, int* binids, int dataLen)
 {
     int *hashes = new int[_numhashes];
+    memset(hashes, 0, sizeof(int) * _numhashes);
+    
     int *hashArray = new int[_numhashes];
 
     for (int i = 0; i < _numhashes; i++)
@@ -197,8 +199,8 @@ DensifiedMinhash::~DensifiedMinhash()
 }
 
 template int* DensifiedMinhash::getHashEasy<float>(int* binids, float* data, int dataLen, int topK);
-template int* DensifiedMinhash::getHashEasy<bfloat16>(int* binids, bfloat16* data, int dataLen, int topK);
+// template int* DensifiedMinhash::fooHashEasy<bfloat16>(int* binids, bfloat16* data, int dataLen, int topK);
 
 template int* DensifiedMinhash::getHash<float>(int* indices, float* data, int* binids, int dataLen);
-template int* DensifiedMinhash::getHash<bfloat16>(int* indices, bfloat16* data, int* binids, int dataLen);
+// template int* DensifiedMinhash::getHash<bfloat16>(int* indices, bfloat16* data, int* binids, int dataLen);
 

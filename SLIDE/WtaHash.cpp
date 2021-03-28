@@ -37,7 +37,7 @@ WtaHash::WtaHash(int numHashes, int noOfBitsToHash)
 
 
 template <class T>
-int * WtaHash::getHash<T>(T* data)
+int * WtaHash::getHash(T* data)
 {
 
     // binsize is the number of times the range is larger than the total number of hashes we need.
