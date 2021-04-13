@@ -65,7 +65,7 @@ void LSH::count()
 
 int* LSH::hashesToIndex(int * hashes)
 {
-  const int logbinsize = (int)floor(log2(binsize));
+  const int logbinsize = (int)floor(log(binsize));
 
 	int * indices = new int[_L];
 	for (int i = 0; i < _L; i++)
