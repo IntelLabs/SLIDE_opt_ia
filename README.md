@@ -19,41 +19,37 @@ docker pull clearlinux/stacks-dlrs_2-mkl
 
 `config.py` controls the parameters of TensorFlow training like `learning rate`. `example_full_softmax.py, example_sampled_softmax.py` are example files for `Amazon-670K` dataset with full softmax and sampled softmax respectively.
 
-Run
 
-```bash
-python python_examples/example_full_softmax.py
-python python_examples/example_sampled_softmax.py
+# Build/Run on Intel platform
+
+## Prerequisites:
+CMake >= 3.0
+Intel Compiler (ICC) >= 19
+
+## Build with ICC compiler
+```
+source /opt/intel/compilers_and_libraries/linux/bin/compilervars.sh -arch intel64 -platform linux
+cd /path/to/slide-root
+mkdir -p bin && cd bin 
+# BDW (AVX2)
+cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc
+# SKX/CLX (AVX512)
+cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc -DOPT_AVX512=1
+# CPX (AVX512 + BF16)
+cmake .. -DCMAKE_CXX_COMPILER=icpc -DCMAKE_C_COMPILER=icc -DOPT_AVX512=1 -DOPT_AVX512_BF16=1
+make -j
 ```
 
-## Running SLIDE
-
-### Dependencies
-
-- CMake v3.0 and above
-- C++11 Compliant compiler
-- Linux: Ubuntu 16.04 and newer
-- Transparent Huge Pages must be enabled.
-  - SLIDE requires approximately 900 2MB pages, and 10 1GB pages: ([Instructions](https://wiki.debian.org/Hugepages))
-
-### Notes:
-
-- For simplicity, please refer to the our [Docker](https://hub.docker.com/repository/docker/ottovonxu/slide) image with all environments installed. To replicate the experiment without setting Hugepages, please download [Amazon-670K](https://drive.google.com/open?id=0B3lPMIHmG6vGdUJwRzltS1dvUVk) in path ```/home/code/HashingDeepLearning/dataset/Amazon``` 
-
-- Also, note that only Skylake or newer architectures support Hugepages. For older Haswell processors, we need to remove the flag `-mavx512f` from the `OPT_FLAGS` line in Makefile. You can also revert to the commit `2d10d46b5f6f1eda5d19f27038a596446fc17cee` to ignore the HugePages optimization and still use SLIDE (which could lead to a 30% slower performance). 
-
-- This version builds all dependencies (which currently are [ZLIB](https://github.com/madler/zlib/tree/v1.2.11) and [CNPY](https://github.com/sarthakpati/cnpy)).
-
-### Commands
-
-Change the paths in ```./SLIDE/Config_amz.csv``` appropriately.
-
-```bash
-git clone https://github.com/sarthakpati/HashingDeepLearning.git
-cd HashingDeepLearning
-mkdir bin
+## Run on Intel SKX/CLX/CPX
+```
 cd bin
-cmake ..
-make
-./runme ../SLIDE/Config_amz.csv
+OMP_NUM_THREADS=<num-of-logic-processor> KMP_HW_SUBSET=<num-of-sockets>s,<num-of-cores-per-socket>c,<num-of-logic-thread-per-core>t KMP_AFFINITY=compact,granularity=fine KMP_BLOCKTIME=200 ./runme ../SLIDE/Config_amz.csv
+For example, on CLX8280 2Sx28c:
+OMP_NUM_THREADS=112 KMP_HW_SUBSET=2s,28c,2t KMP_AFFINITY=compact,granularity=fine KMP_BLOCKTIME=200 ./runme ../SLIDE/Config_amz.csv
+```
+For best performance please set Batchsize=multiple-of-logic-core-number from SLIDE/Config_amz.csv.
+
+Results can be checked from the log file under dataset:
+```
+tail -f dataset/log.txt
 ```
