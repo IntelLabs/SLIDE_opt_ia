@@ -112,7 +112,7 @@ int* LSH::add(int *indices, int id)
 }
 
 void LSH::hashesToIndexAddOpt(int * hashes, int id) {
-  const int logbinsize = (int)floor(log2(binsize));
+  const int logbinsize = (int)floor(log(binsize));
   for (int i = 0; i < _L; i++) {
     unsigned int index = 0;
 
