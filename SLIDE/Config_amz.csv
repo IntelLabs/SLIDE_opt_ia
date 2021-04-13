@@ -1,10 +1,10 @@
-RangePow = 6,15
-K = 2,5
-L = 20,256
+RangePow = 6,18
+K = 2,6
+L = 20,1024
 Sparsity = 1,0.005,1,1
 
 Batchsize=1024
-Rehash=12800
+Rehash=6400
 Rebuild=128000
 InputDim=135909
 totRecords=490449
