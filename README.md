@@ -53,3 +53,5 @@ Results can be checked from the log file under dataset:
 ```
 tail -f dataset/log.txt
 ```
+
+> Reviewed, 12/16/2022 michaelbeale-il
